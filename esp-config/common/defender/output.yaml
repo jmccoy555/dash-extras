@@ -564,6 +564,38 @@ script:
       - delay: 30s
       - switch.turn_off: window_front_power
 
+  # Rear window equivalents (see modbus-client.yaml for the relay
+  # switches - a modbus relay board instead of GPIO, but the same pattern).
+  # Kept here alongside the front scripts rather than in their own
+  # script: block in modbus-client.yaml - a third separate script: key
+  # across packages broke ESPHome's config merge for input.yaml's
+  # pre-existing script: block.
+  - id: window_rear_up_script
+    mode: single
+    then:
+      - switch.turn_on: rear_power
+      - delay: 1s
+      - switch.turn_on: rear_left_up_relay
+      - switch.turn_on: rear_right_up_relay
+      - delay: 500ms
+      - switch.turn_off: rear_left_up_relay
+      - switch.turn_off: rear_right_up_relay
+      - delay: 30s
+      - switch.turn_off: rear_power
+
+  - id: window_rear_down_script
+    mode: single
+    then:
+      - switch.turn_on: rear_power
+      - delay: 1s
+      - switch.turn_on: rear_left_down_relay
+      - switch.turn_on: rear_right_down_relay
+      - delay: 500ms
+      - switch.turn_off: rear_left_down_relay
+      - switch.turn_off: rear_right_down_relay
+      - delay: 30s
+      - switch.turn_off: rear_power
+
 
 web_server:
   sorting_groups:

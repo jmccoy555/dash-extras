@@ -539,33 +539,6 @@ button:
     web_server:
       sorting_group_id: sorting_group_windows
 
-script:
-  - id: window_rear_up_script
-    mode: single
-    then:
-      - switch.turn_on: rear_power
-      - delay: 1s
-      - switch.turn_on: rear_left_up_relay
-      - switch.turn_on: rear_right_up_relay
-      - delay: 500ms
-      - switch.turn_off: rear_left_up_relay
-      - switch.turn_off: rear_right_up_relay
-      - delay: 30s
-      - switch.turn_off: rear_power
-
-  - id: window_rear_down_script
-    mode: single
-    then:
-      - switch.turn_on: rear_power
-      - delay: 1s
-      - switch.turn_on: rear_left_down_relay
-      - switch.turn_on: rear_right_down_relay
-      - delay: 500ms
-      - switch.turn_off: rear_left_down_relay
-      - switch.turn_off: rear_right_down_relay
-      - delay: 30s
-      - switch.turn_off: rear_power
-
   # Named "Dash Shutdown Request" - the internal flag switch of that name
   # (see output.yaml) is hidden from the UI, so this button is the one
   # user-visible action for it, rather than having both a real action
