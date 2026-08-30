@@ -1,0 +1,616 @@
+# The ESP's connection to dash itself. dash runs as a genuine Modbus slave
+# (see the dash-gui project) - the ESP is the bus's only master, including
+# of dash, rather than dash mastering the ESP.
+#
+# Status pushes to dash (sensor readings, relay/light state) use the
+# modbus_client component (ad-hoc request/response) below, since that's
+# pushing arbitrary values on a timer rather than declaring persistent
+# entities. Polling dash's request coils (button presses) further down
+# uses modbus_controller instead - see the comment there for why.
+modbus_client:
+  - id: client_dash
+    address: 5
+    modbus_id: bus_client
+
+# Blocks req_inverter_power's on_state handler for a few seconds after boot,
+# so a poll landing before modbus-client.yaml's on_boot clear-write reaches
+# dash can't read the inverter's stale pre-reboot request coil and turn it
+# straight back on (see the on_boot comment there).
+globals:
+  - id: dash_boot_guard_inverter
+    type: bool
+    restore_value: false
+    initial_value: 'true'
+
+interval:
+  # Push sensor readings to dash - it only ever reads these locally now.
+  - interval: 5s
+    then:
+      - modbus_client.write_multiple_registers:
+          address: 5
+          start_address: 1
+          values: !lambda |-
+            return std::vector<uint16_t>{
+              (uint16_t) id(temperature_outside).state,
+              (uint16_t) (id(temp_inside).state * 10),
+              (uint16_t) (id(humid_inside).state * 10),
+            };
+
+  # Push current relay/light state to dash as ONE write covering the whole
+  # 10-52 status range (unused gaps just padded with false), mirroring how
+  # the read_coils poll below already reads one contiguous 43-coil block.
+  #
+  # Was 4 separate write_multiple_coils calls (10/20/40/50) with 150ms
+  # delays between them. Confirmed live that even with the delays, those 4
+  # transactions to address 5 every 1.5s were still colliding with the
+  # 300ms read_coils poll and 5s register push - "Frame already active for
+  # 5" refusals piling up and the read poll never getting a turn at all
+  # (zero read transactions ever seen on the wire). A single transaction
+  # per push cycle leaves far more room on the bus for the read poll and
+  # the register push. Status doesn't need to be sub-second fresh; button
+  # responsiveness does.
+  #
+  # Bumped 1500ms -> 4000ms: even as one consolidated write, this was still
+  # winning a turn on the bus almost every single cycle while the (also
+  # consolidated into one read) button-request poll below only got through
+  # roughly once every ~15s - the two writes were crowding out the read far
+  # more than their fair share. Status can afford to be slower; buttons
+  # can't.
+  - interval: 4000ms
+    then:
+      - modbus_client.write_multiple_coils:
+          address: 5
+          start_address: 10
+          values: !lambda |-
+            return std::vector<bool>{
+              id(worklight_passanger_side).state,
+              id(worklight_drivers_side).state,
+              id(worklight_rear).state,
+              id(worklight_bonnet).state,
+              id(headlights_auto).state,
+              id(sidelights_auto).state,
+              id(service_mode).state,
+              false, false, false,
+              id(lightbar_main).state,
+              id(lightbar_inner).state,
+              id(lightbar_outer).state,
+              id(lightbar_white).state,
+              id(lightbar_amber).state,
+              id(lightbar_auto_main).state,
+              id(lightbar_auto_amber).state,
+              id(lightbar_auto_white).state,
+              // 28, 29: unused. 30: window_front_power - a real on/off
+              // switch (unlike 31-36, the momentary window buttons, which
+              // have no persistent state to push). This was just `false`
+              // before - never reflecting the real switch, so dash's
+              // status coil for it stayed permanently stuck off and the
+              // optimistic click style reverted to grey once the
+              // pending-click grace window ran out.
+              // 31-39: unused (window buttons + padding to 40).
+              false, false,
+              id(window_front_power).state,
+              false, false, false, false, false, false, false, false, false,
+              id(inverter_power).state,
+              id(charger_1).state,
+              id(charger_2).state,
+              id(suspension_handbrake).state,
+              id(suspension_power).state,
+              id(dash_shutdown_request).state,
+              id(james_fob).state,
+              id(james_phone).state,
+              false, false,
+              id(suspension_service).state,
+              id(low_box).state,
+              id(diff_lock).state,
+              // 53-56: unused (individual rear window presses are
+              // momentary, no persistent state to push - same reasoning
+              // as 31-36 above). 57: rear_power, a real toggle like
+              // window_front_power - needs its status pushed the same way
+              // (the fix for window_front_power's flicker-to-grey bug
+              // applies identically here).
+              false, false, false, false,
+              id(rear_power).state,
+              // 58-59: unused (combined rear up/down are momentary).
+              // 60-61: side_lights/low_beam, real relays on the ESP -
+              // added to the Main Lights widget alongside the lightbar
+              // controls.
+              false, false,
+              id(side_lights).state,
+              id(low_beam).state,
+            };
+
+  # NOTE: the request-coil poll used to live here as a modbus_client.read_coils
+  # action on a 300ms interval. Root-caused live (via ESPHome's own modbus.cpp
+  # queue_pdu(): duplicate frames - same address + identical PDU bytes - get
+  # merged into the pending count of whatever entry is already queued instead
+  # of being sent fresh, and modbus_client actions aren't marked "continuous"
+  # so a stuck/timed-out entry never gets retried, just endlessly refused).
+  # Since our read request never changes byte-for-byte, every single poll
+  # after the first was silently absorbed rather than retransmitted - it
+  # never appeared on the wire again, hence buttons never doing anything.
+  # modbus_controller (used below, same as client_10/client_20) marks its
+  # polls as continuous and has proven, working retry-on-timeout behaviour
+  # already relied on elsewhere in this file - see the binary_sensor block.
+
+# Poll dash's REQUEST coils (offset +100 from the status range above) for
+# button requests, via modbus_controller instead of a hand-rolled
+# modbus_client.read_coils action - see note above for why. dash's request
+# coils are a separate range from the status coils above specifically so
+# the status push can't clobber a click before this poll notices it
+# (see dash-gui's REQUEST_COIL_OFFSET).
+modbus_controller:
+  - id: client_dash_requests
+    address: 5
+    modbus_id: bus_client
+    update_interval: 300ms
+
+binary_sensor:
+  - platform: modbus_controller
+    modbus_controller_id: client_dash_requests
+    id: req_worklight_passanger_side
+    internal: true
+    register_type: coil
+    address: 110
+    on_state:
+      - lambda: |-
+          if (x) id(worklight_passanger_side).turn_on();
+          else id(worklight_passanger_side).turn_off();
+  - platform: modbus_controller
+    modbus_controller_id: client_dash_requests
+    id: req_worklight_drivers_side
+    internal: true
+    register_type: coil
+    address: 111
+    on_state:
+      - lambda: |-
+          if (x) id(worklight_drivers_side).turn_on();
+          else id(worklight_drivers_side).turn_off();
+  - platform: modbus_controller
+    modbus_controller_id: client_dash_requests
+    id: req_worklight_rear
+    internal: true
+    register_type: coil
+    address: 112
+    on_state:
+      - lambda: |-
+          if (x) id(worklight_rear).turn_on();
+          else id(worklight_rear).turn_off();
+  - platform: modbus_controller
+    modbus_controller_id: client_dash_requests
+    id: req_worklight_bonnet
+    internal: true
+    register_type: coil
+    address: 113
+    on_state:
+      - lambda: |-
+          if (x) id(worklight_bonnet).turn_on();
+          else id(worklight_bonnet).turn_off();
+  - platform: modbus_controller
+    modbus_controller_id: client_dash_requests
+    id: req_headlights_auto
+    internal: true
+    register_type: coil
+    address: 114
+    on_state:
+      - lambda: |-
+          if (x) id(headlights_auto).turn_on();
+          else id(headlights_auto).turn_off();
+  - platform: modbus_controller
+    modbus_controller_id: client_dash_requests
+    id: req_sidelights_auto
+    internal: true
+    register_type: coil
+    address: 115
+    on_state:
+      - lambda: |-
+          if (x) id(sidelights_auto).turn_on();
+          else id(sidelights_auto).turn_off();
+  - platform: modbus_controller
+    modbus_controller_id: client_dash_requests
+    id: req_service_mode
+    internal: true
+    register_type: coil
+    address: 116
+    on_state:
+      - lambda: |-
+          if (x) id(service_mode).turn_on();
+          else id(service_mode).turn_off();
+  - platform: modbus_controller
+    modbus_controller_id: client_dash_requests
+    id: req_lightbar_main
+    internal: true
+    register_type: coil
+    address: 120
+    on_state:
+      - lambda: |-
+          if (x) id(lightbar_main).turn_on();
+          else id(lightbar_main).turn_off();
+  - platform: modbus_controller
+    modbus_controller_id: client_dash_requests
+    id: req_lightbar_inner
+    internal: true
+    register_type: coil
+    address: 121
+    on_state:
+      - lambda: |-
+          if (x) id(lightbar_inner).turn_on();
+          else id(lightbar_inner).turn_off();
+  - platform: modbus_controller
+    modbus_controller_id: client_dash_requests
+    id: req_lightbar_outer
+    internal: true
+    register_type: coil
+    address: 122
+    on_state:
+      - lambda: |-
+          if (x) id(lightbar_outer).turn_on();
+          else id(lightbar_outer).turn_off();
+  - platform: modbus_controller
+    modbus_controller_id: client_dash_requests
+    id: req_lightbar_white
+    internal: true
+    register_type: coil
+    address: 123
+    on_state:
+      - lambda: |-
+          if (x) id(lightbar_white).turn_on();
+          else id(lightbar_white).turn_off();
+  - platform: modbus_controller
+    modbus_controller_id: client_dash_requests
+    id: req_lightbar_amber
+    internal: true
+    register_type: coil
+    address: 124
+    on_state:
+      - lambda: |-
+          if (x) id(lightbar_amber).turn_on();
+          else id(lightbar_amber).turn_off();
+  - platform: modbus_controller
+    modbus_controller_id: client_dash_requests
+    id: req_lightbar_auto_main
+    internal: true
+    register_type: coil
+    address: 125
+    on_state:
+      - lambda: |-
+          if (x) id(lightbar_auto_main).turn_on();
+          else id(lightbar_auto_main).turn_off();
+  - platform: modbus_controller
+    modbus_controller_id: client_dash_requests
+    id: req_lightbar_auto_amber
+    internal: true
+    register_type: coil
+    address: 126
+    on_state:
+      - lambda: |-
+          if (x) id(lightbar_auto_amber).turn_on();
+          else id(lightbar_auto_amber).turn_off();
+  - platform: modbus_controller
+    modbus_controller_id: client_dash_requests
+    id: req_lightbar_auto_white
+    internal: true
+    register_type: coil
+    address: 127
+    on_state:
+      - lambda: |-
+          if (x) id(lightbar_auto_white).turn_on();
+          else id(lightbar_auto_white).turn_off();
+  - platform: modbus_controller
+    modbus_controller_id: client_dash_requests
+    id: req_window_front_power
+    internal: true
+    register_type: coil
+    address: 130
+    on_state:
+      - lambda: |-
+          if (x) id(window_front_power).turn_on();
+          else id(window_front_power).turn_off();
+  - platform: modbus_controller
+    modbus_controller_id: client_dash_requests
+    id: req_window_driver_up
+    internal: true
+    register_type: coil
+    address: 131
+    on_press:
+      - lambda: 'id(window_driver_up).press();'
+  - platform: modbus_controller
+    modbus_controller_id: client_dash_requests
+    id: req_window_driver_down
+    internal: true
+    register_type: coil
+    address: 132
+    on_press:
+      - lambda: 'id(window_driver_down).press();'
+  - platform: modbus_controller
+    modbus_controller_id: client_dash_requests
+    id: req_window_passanger_up
+    internal: true
+    register_type: coil
+    address: 133
+    on_press:
+      - lambda: 'id(window_passanger_up).press();'
+  - platform: modbus_controller
+    modbus_controller_id: client_dash_requests
+    id: req_window_passanger_down
+    internal: true
+    register_type: coil
+    address: 134
+    on_press:
+      - lambda: 'id(window_passanger_down).press();'
+  - platform: modbus_controller
+    modbus_controller_id: client_dash_requests
+    id: req_window_front_up
+    internal: true
+    register_type: coil
+    address: 135
+    on_press:
+      - lambda: 'id(window_front_up).press();'
+  - platform: modbus_controller
+    modbus_controller_id: client_dash_requests
+    id: req_window_front_down
+    internal: true
+    register_type: coil
+    address: 136
+    on_press:
+      - lambda: 'id(window_front_down).press();'
+  - platform: modbus_controller
+    modbus_controller_id: client_dash_requests
+    id: req_inverter_power
+    internal: true
+    register_type: coil
+    address: 140
+    on_state:
+      - lambda: |-
+          if (id(dash_boot_guard_inverter)) return;
+          if (x) id(inverter_power).turn_on();
+          else id(inverter_power).turn_off();
+  - platform: modbus_controller
+    modbus_controller_id: client_dash_requests
+    id: req_charger_1
+    internal: true
+    register_type: coil
+    address: 141
+    on_state:
+      - lambda: |-
+          if (x) id(charger_1).turn_on();
+          else id(charger_1).turn_off();
+  - platform: modbus_controller
+    modbus_controller_id: client_dash_requests
+    id: req_charger_2
+    internal: true
+    register_type: coil
+    address: 142
+    on_state:
+      - lambda: |-
+          if (x) id(charger_2).turn_on();
+          else id(charger_2).turn_off();
+  - platform: modbus_controller
+    modbus_controller_id: client_dash_requests
+    id: req_suspension_handbrake
+    internal: true
+    register_type: coil
+    address: 143
+    on_state:
+      - lambda: |-
+          if (x) id(suspension_handbrake).turn_on();
+          else id(suspension_handbrake).turn_off();
+  - platform: modbus_controller
+    modbus_controller_id: client_dash_requests
+    id: req_suspension_power
+    internal: true
+    register_type: coil
+    address: 144
+    on_state:
+      - lambda: |-
+          if (x) id(suspension_power).turn_on();
+          else id(suspension_power).turn_off();
+  - platform: modbus_controller
+    modbus_controller_id: client_dash_requests
+    id: req_dash_shutdown_request
+    internal: true
+    register_type: coil
+    address: 145
+    on_state:
+      - lambda: |-
+          if (x) id(dash_shutdown_request).turn_on();
+          else id(dash_shutdown_request).turn_off();
+  - platform: modbus_controller
+    modbus_controller_id: client_dash_requests
+    id: req_suspension_service
+    internal: true
+    register_type: coil
+    address: 150
+    on_state:
+      - lambda: |-
+          if (x) id(suspension_service).turn_on();
+          else id(suspension_service).turn_off();
+  - platform: modbus_controller
+    modbus_controller_id: client_dash_requests
+    id: req_low_box
+    internal: true
+    register_type: coil
+    address: 151
+    on_state:
+      - lambda: |-
+          if (x) id(low_box).turn_on();
+          else id(low_box).turn_off();
+  - platform: modbus_controller
+    modbus_controller_id: client_dash_requests
+    id: req_diff_lock
+    internal: true
+    register_type: coil
+    address: 152
+    on_state:
+      - lambda: |-
+          if (x) id(diff_lock).turn_on();
+          else id(diff_lock).turn_off();
+
+# Filler entries covering every unused gap address in the request range
+# (117-119, 128-129, 137-139, 146-149) - not tied to anything, just closing
+# every hole so the whole 110-152 span is contiguous. ESPHome docs:
+# "To avoid generating multiple commands ... register_count can be used to
+# fill the gaps" - these are the coil equivalent. Without these,
+# modbus_controller splits this into 5 separate read commands
+# (110,120,130,140,150) that then have to compete for turns on the shared
+# bus individually instead of as one merged read.
+  - platform: modbus_controller
+    modbus_controller_id: client_dash_requests
+    id: req_filler_117
+    internal: true
+    register_type: coil
+    address: 117
+  - platform: modbus_controller
+    modbus_controller_id: client_dash_requests
+    id: req_filler_118
+    internal: true
+    register_type: coil
+    address: 118
+  - platform: modbus_controller
+    modbus_controller_id: client_dash_requests
+    id: req_filler_119
+    internal: true
+    register_type: coil
+    address: 119
+  - platform: modbus_controller
+    modbus_controller_id: client_dash_requests
+    id: req_filler_128
+    internal: true
+    register_type: coil
+    address: 128
+  - platform: modbus_controller
+    modbus_controller_id: client_dash_requests
+    id: req_filler_129
+    internal: true
+    register_type: coil
+    address: 129
+  - platform: modbus_controller
+    modbus_controller_id: client_dash_requests
+    id: req_filler_137
+    internal: true
+    register_type: coil
+    address: 137
+  - platform: modbus_controller
+    modbus_controller_id: client_dash_requests
+    id: req_filler_138
+    internal: true
+    register_type: coil
+    address: 138
+  - platform: modbus_controller
+    modbus_controller_id: client_dash_requests
+    id: req_filler_139
+    internal: true
+    register_type: coil
+    address: 139
+  - platform: modbus_controller
+    modbus_controller_id: client_dash_requests
+    id: req_filler_146
+    internal: true
+    register_type: coil
+    address: 146
+  - platform: modbus_controller
+    modbus_controller_id: client_dash_requests
+    id: req_filler_147
+    internal: true
+    register_type: coil
+    address: 147
+  - platform: modbus_controller
+    modbus_controller_id: client_dash_requests
+    id: req_filler_148
+    internal: true
+    register_type: coil
+    address: 148
+  - platform: modbus_controller
+    modbus_controller_id: client_dash_requests
+    id: req_filler_149
+    internal: true
+    register_type: coil
+    address: 149
+
+  # Rear window requests (153-156) - contiguous right after 152
+  # (diff_lock), so these extend the existing merged read automatically,
+  # no new bus transaction. Momentary presses, same pattern as the front
+  # window on_press entries above.
+  - platform: modbus_controller
+    modbus_controller_id: client_dash_requests
+    id: req_rear_left_up
+    internal: true
+    register_type: coil
+    address: 153
+    on_press:
+      - lambda: 'id(rear_left_up).press();'
+  - platform: modbus_controller
+    modbus_controller_id: client_dash_requests
+    id: req_rear_left_down
+    internal: true
+    register_type: coil
+    address: 154
+    on_press:
+      - lambda: 'id(rear_left_down).press();'
+  - platform: modbus_controller
+    modbus_controller_id: client_dash_requests
+    id: req_rear_right_up
+    internal: true
+    register_type: coil
+    address: 155
+    on_press:
+      - lambda: 'id(rear_right_up).press();'
+  - platform: modbus_controller
+    modbus_controller_id: client_dash_requests
+    id: req_rear_right_down
+    internal: true
+    register_type: coil
+    address: 156
+    on_press:
+      - lambda: 'id(rear_right_down).press();'
+
+  # Rear power (a real toggle, like req_window_front_power) and the
+  # combined rear up/down (momentary, like the front ones) - contiguous
+  # right after 156 so these extend the same merged read again.
+  - platform: modbus_controller
+    modbus_controller_id: client_dash_requests
+    id: req_rear_power
+    internal: true
+    register_type: coil
+    address: 157
+    on_state:
+      - lambda: |-
+          if (x) id(rear_power).turn_on();
+          else id(rear_power).turn_off();
+  - platform: modbus_controller
+    modbus_controller_id: client_dash_requests
+    id: req_rear_up
+    internal: true
+    register_type: coil
+    address: 158
+    on_press:
+      - lambda: 'id(rear_up).press();'
+  - platform: modbus_controller
+    modbus_controller_id: client_dash_requests
+    id: req_rear_down
+    internal: true
+    register_type: coil
+    address: 159
+    on_press:
+      - lambda: 'id(rear_down).press();'
+
+  # Side lights / low beam (real relays, added to the Main Lights widget).
+  - platform: modbus_controller
+    modbus_controller_id: client_dash_requests
+    id: req_side_lights
+    internal: true
+    register_type: coil
+    address: 160
+    on_state:
+      - lambda: |-
+          if (x) id(side_lights).turn_on();
+          else id(side_lights).turn_off();
+  - platform: modbus_controller
+    modbus_controller_id: client_dash_requests
+    id: req_headlights
+    internal: true
+    register_type: coil
+    address: 161
+    on_state:
+      - lambda: |-
+          if (x) id(low_beam).turn_on();
+          else id(low_beam).turn_off();

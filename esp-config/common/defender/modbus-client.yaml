@@ -1,0 +1,620 @@
+# drivers:
+#     in:
+#         handbreak
+#     out:
+#         heaated seat
+#         low box
+#         diff lock
+#         starter relay
+
+# passanger:
+#     in:
+
+#     out:
+#         heated seat
+#         compressor on
+#         handbreak
+#         suspension service mode
+#         winch
+#         light main
+#         light amber
+#         light white
+#         charger 1
+#         charger 2
+#         heater fan
+
+# mid:
+#     in:
+#         window up
+#         window down
+#         window up
+#         window down
+#         heated seat 1
+#         heated seat 2
+#         heated seat 1
+#         heated seat 2
+#     out:
+#         winodw up
+#         window down
+#         window up
+#         window down
+#         window power
+#         heated seat 1
+#         heated seat 2
+#         heated seat 1
+#         heated seat 2
+#         heater
+#         inverter
+#         fuel pump
+
+# rear:
+#     in:
+#         reverse
+#         suspension lower
+#         rear door open
+#         work lights
+#         coffee select
+#         socket select
+#     out:
+#         coffee / socket changerover
+#         router / wifi power on
+
+# Everything on the ESP's own client/master role - the real devices it polls
+# itself. dash never talks to any of these addresses directly; it only
+# talks to the ESP (see the dash-gui project), which keeps this bus down to
+# a single master instead of dash mastering some devices independently.
+modbus_controller:
+  - id: sht20
+    address: 9
+    modbus_id: bus_client
+    setup_priority: -10
+    update_interval: 30s
+  # - id: client_10_1s
+  #   address: 10
+  #   modbus_id: bus_client
+  #   setup_priority: -10
+  #   update_interval: 1s
+  - id: client_10
+    address: 10
+    modbus_id: bus_client
+    setup_priority: -10
+    update_interval: 2s
+  - id: client_20
+    address: 20
+    modbus_id: bus_client
+    setup_priority: -10
+    update_interval: 5s
+  # The rear window relay board - left/right, up/down.
+  - id: client_30
+    address: 30
+    modbus_id: bus_client
+    setup_priority: -10
+    update_interval: 5s
+
+sensor:
+  - platform: modbus_controller
+    modbus_controller_id: sht20
+    name: "Temperature Front"
+    id: temp_inside
+    register_type: read
+    address: 0x0001
+    unit_of_measurement: "°C"
+    value_type: U_WORD
+    accuracy_decimals: 1
+    filters:
+      - multiply: 0.1
+    web_server:
+      sorting_group_id: sorting_group_sensors
+
+  - platform: modbus_controller
+    modbus_controller_id: sht20
+    name: "Humidity Front"
+    id: humid_inside
+    register_type: read
+    address: 0x0002
+    unit_of_measurement: "%"
+    value_type: U_WORD
+    accuracy_decimals: 1
+    filters:
+      - multiply: 0.1
+    web_server:
+      sorting_group_id: sorting_group_sensors
+
+binary_sensor:
+  - platform: modbus_controller
+    modbus_controller_id: client_10 #_1s
+    name: "Handbrake"
+    register_type: discrete_input
+    address: 0
+  #   force_new_range: true
+    on_press:
+      then:
+        - switch.turn_on: suspension_handbrake
+    on_release:
+      then:
+        - switch.turn_off: suspension_handbrake
+    web_server:
+      sorting_group_id: sorting_group_sensors
+
+  # - platform: modbus_controller
+  #   modbus_controller_id: client_10
+  #   # name: "Input 2"
+  #   id: input_2
+  #   register_type: discrete_input
+  #   address: 1
+
+  # - platform: modbus_controller
+  #   modbus_controller_id: client_10
+  #   # name: "Input 3"
+  #   id: input_3
+  #   register_type: discrete_input
+  #   address: 2
+
+  # - platform: modbus_controller
+  #   modbus_controller_id: client_10
+  #   # name: "Input 4"
+  #   id: input_4
+  #   register_type: discrete_input
+  #   address: 3
+
+  # - platform: modbus_controller
+  #   modbus_controller_id: client_10
+  #   id: input_5
+  #   # name: "Input 5"
+  #   register_type: discrete_input
+  #   address: 4
+
+  # - platform: modbus_controller
+  #   modbus_controller_id: client_10
+  #   id: input_6
+  #   # name: "Input 6"
+  #   register_type: discrete_input
+  #   address: 5
+
+  # - platform: modbus_controller
+  #   modbus_controller_id: client_10
+  #   id: input_7
+  #   # name: "Input 7"
+  #   register_type: discrete_input
+  #   address: 6
+
+  # - platform: modbus_controller
+  #   modbus_controller_id: client_10
+  #   id: input_8
+  #   # name: "Input 8"
+  #   register_type: discrete_input
+  #   address: 7
+
+##### Need to add the other 7 if any more than the first input needs to be read..... no idea why!
+
+  - platform: modbus_controller
+    modbus_controller_id: client_10 #_1s
+    name: "Inverter Power State"
+    id: inverter_power_state
+    register_type: coil
+    address: 0
+    on_press:
+      then:
+        - switch.turn_on: inverter_power
+    on_release:
+      then:
+        - switch.turn_off: inverter_power
+    web_server:
+      sorting_group_id: sorting_group_sensors
+
+  # Per this board's (R4SLS08) datasheet: every worked read/write example
+  # uses register address 0x0000 with count 8 (the full byte for all 8
+  # channels), matching the note above the discrete_input block ("need to
+  # add the other 7 if any more than the first input needs to be read").
+  # This device doesn't respond to individual reads or a partial-byte
+  # combined read (e.g. 0-4, count 5) - it wants exactly 0-7, count 8.
+  # Filler coils 5/6/7 below complete that range so modbus_controller's
+  # automatic range-merging produces the one read it will actually answer.
+  - platform: modbus_controller
+    modbus_controller_id: client_20
+    name: "Charger 1 Power State"
+    id: charger_1_state
+    register_type: coil
+    address: 0
+    on_press:
+      then:
+        - switch.turn_on: charger_1
+    on_release:
+      then:
+        - switch.turn_off: charger_1
+    web_server:
+      sorting_group_id: sorting_group_sensors
+
+  - platform: modbus_controller
+    modbus_controller_id: client_20
+    name: "Charger 2 Power State"
+    id: charger_2_state
+    register_type: coil
+    address: 1
+    on_press:
+      then:
+        - switch.turn_on: charger_2
+    on_release:
+      then:
+        - switch.turn_off: charger_2
+    web_server:
+      sorting_group_id: sorting_group_sensors
+
+  - platform: modbus_controller
+    modbus_controller_id: client_20
+    name: "Suspension Handbrake State"
+    id: suspension_handbrake_state
+    register_type: coil
+    address: 2
+    on_press:
+      then:
+        - switch.turn_on: suspension_handbrake
+    on_release:
+      then:
+        - switch.turn_off: suspension_handbrake
+    web_server:
+      sorting_group_id: sorting_group_sensors
+
+  - platform: modbus_controller
+    modbus_controller_id: client_20
+    name: "Suspension Power State"
+    id: suspension_power_state
+    register_type: coil
+    address: 3
+    on_press:
+      then:
+        - switch.turn_on: suspension_power
+    on_release:
+      then:
+        - switch.turn_off: suspension_power
+    web_server:
+      sorting_group_id: sorting_group_sensors
+
+switch:
+  - platform: modbus_controller
+    modbus_controller_id: client_10
+    name: "Inverter"
+    id: inverter_power
+    restore_mode: DISABLED
+    register_type: coil
+    address: 0
+  #    inverted: true
+    web_server:
+      sorting_group_id: sorting_group_gpio_control
+
+  # Placeholder addresses - these will probably move once the actual relay
+  # board they belong on is wired up.
+  #
+  # Per this board's (R4SLS08) datasheet: every worked read/write example
+  # uses register address 0x0000 with count 8 (the full byte covering all
+  # 8 channels), even on the 4DO variant where only channels 4-7 are real
+  # relays - matching the note above ("need to add the other 7 if any more
+  # than the first input needs to be read"), which was for discrete_input
+  # but is evidently the same quirk. Filler coils 1/2/3/6/7 below complete
+  # the 0-7 range so modbus_controller's combined read is a proper
+  # 0x0000/count-8, which this device actually answers, rather than a
+  # partial start=4/count=2 read, which it doesn't.
+  - platform: modbus_controller
+    modbus_controller_id: client_10
+    name: "Low Box"
+    id: low_box
+    restore_mode: DISABLED
+    register_type: coil
+    address: 4
+    web_server:
+      sorting_group_id: sorting_group_gpio_control
+
+  - platform: modbus_controller
+    modbus_controller_id: client_10
+    name: "Diff Lock"
+    id: diff_lock
+    restore_mode: DISABLED
+    register_type: coil
+    address: 5
+    web_server:
+      sorting_group_id: sorting_group_gpio_control
+
+  - platform: modbus_controller
+    modbus_controller_id: client_10
+    id: client_10_coil_filler_1
+    internal: true
+    register_type: coil
+    address: 1
+  - platform: modbus_controller
+    modbus_controller_id: client_10
+    id: client_10_coil_filler_2
+    internal: true
+    register_type: coil
+    address: 2
+  - platform: modbus_controller
+    modbus_controller_id: client_10
+    id: client_10_coil_filler_3
+    internal: true
+    register_type: coil
+    address: 3
+  - platform: modbus_controller
+    modbus_controller_id: client_10
+    id: client_10_coil_filler_6
+    internal: true
+    register_type: coil
+    address: 6
+  - platform: modbus_controller
+    modbus_controller_id: client_10
+    id: client_10_coil_filler_7
+    internal: true
+    register_type: coil
+    address: 7
+
+  - platform: modbus_controller
+    modbus_controller_id: client_20
+    name: "Charger 1"
+    id: charger_1
+    restore_mode: DISABLED
+    register_type: coil
+    address: 0
+  #    inverted: true
+    web_server:
+      sorting_group_id: sorting_group_gpio_control
+
+  - platform: modbus_controller
+    modbus_controller_id: client_20
+    name: "Charger 2"
+    id: charger_2
+    restore_mode: DISABLED
+    register_type: coil
+    address: 1
+  #    inverted: true
+    web_server:
+      sorting_group_id: sorting_group_gpio_control
+
+  - platform: modbus_controller
+    modbus_controller_id: client_20
+    name: "Suspension Handbrake"
+    id: suspension_handbrake
+    restore_mode: DISABLED
+    register_type: coil
+    address: 2
+#    inverted: true
+    web_server:
+      sorting_group_id: sorting_group_gpio_control
+
+  - platform: modbus_controller
+    modbus_controller_id: client_20
+    name: "Suspension Power"
+    id: suspension_power
+    restore_mode: DISABLED
+    register_type: coil
+    address: 3
+  #    inverted: true
+    web_server:
+      sorting_group_id: sorting_group_gpio_control
+
+  - platform: modbus_controller
+    modbus_controller_id: client_20
+    name: "Suspension Service"
+    id: suspension_service
+    restore_mode: DISABLED
+    register_type: coil
+    address: 4
+    web_server:
+      sorting_group_id: sorting_group_gpio_control
+
+  - platform: modbus_controller
+    modbus_controller_id: client_20
+    id: client_20_coil_filler_5
+    internal: true
+    register_type: coil
+    address: 5
+  - platform: modbus_controller
+    modbus_controller_id: client_20
+    id: client_20_coil_filler_6
+    internal: true
+    register_type: coil
+    address: 6
+  - platform: modbus_controller
+    modbus_controller_id: client_20
+    id: client_20_coil_filler_7
+    internal: true
+    register_type: coil
+    address: 7
+
+  # Rear window relays - momentary like the front driver/passenger
+  # windows, so no readback needed at all (assumed_state skips polling
+  # entirely - there's nothing to mis-read here since we never try to read
+  # these). The actual up/down buttons (which pulse these on/off) are
+  # below, mirroring output.yaml's window_driver_up_gpio pattern but with
+  # a modbus coil instead of a raw GPIO pin.
+  - platform: modbus_controller
+    modbus_controller_id: client_30
+    id: rear_left_up_relay
+    internal: true
+    restore_mode: DISABLED
+    register_type: coil
+    address: 0
+    assumed_state: true
+  - platform: modbus_controller
+    modbus_controller_id: client_30
+    id: rear_left_down_relay
+    internal: true
+    restore_mode: DISABLED
+    register_type: coil
+    address: 1
+    assumed_state: true
+  - platform: modbus_controller
+    modbus_controller_id: client_30
+    id: rear_right_up_relay
+    internal: true
+    restore_mode: DISABLED
+    register_type: coil
+    address: 2
+    assumed_state: true
+  - platform: modbus_controller
+    modbus_controller_id: client_30
+    id: rear_right_down_relay
+    internal: true
+    restore_mode: DISABLED
+    register_type: coil
+    address: 3
+    assumed_state: true
+
+  # Shared enable relay for both rear windows, same role as
+  # window_front_power in output.yaml (must never survive a reboot on,
+  # same reasoning as that one).
+  - platform: modbus_controller
+    modbus_controller_id: client_30
+    name: "Rear Power"
+    id: rear_power
+    restore_mode: ALWAYS_OFF
+    register_type: coil
+    address: 4
+    assumed_state: true
+    web_server:
+      sorting_group_id: sorting_group_windows
+
+button:
+  - platform: template
+    name: "Rear Left Up"
+    id: rear_left_up
+    on_press:
+      then:
+        - switch.turn_on: rear_left_up_relay
+        - delay: 500ms
+        - switch.turn_off: rear_left_up_relay
+    web_server:
+      sorting_group_id: sorting_group_windows
+
+  - platform: template
+    name: "Rear Left Down"
+    id: rear_left_down
+    on_press:
+      then:
+        - switch.turn_on: rear_left_down_relay
+        - delay: 500ms
+        - switch.turn_off: rear_left_down_relay
+    web_server:
+      sorting_group_id: sorting_group_windows
+
+  - platform: template
+    name: "Rear Right Up"
+    id: rear_right_up
+    on_press:
+      then:
+        - switch.turn_on: rear_right_up_relay
+        - delay: 500ms
+        - switch.turn_off: rear_right_up_relay
+    web_server:
+      sorting_group_id: sorting_group_windows
+
+  - platform: template
+    name: "Rear Right Down"
+    id: rear_right_down
+    on_press:
+      then:
+        - switch.turn_on: rear_right_down_relay
+        - delay: 500ms
+        - switch.turn_off: rear_right_down_relay
+    web_server:
+      sorting_group_id: sorting_group_windows
+
+  # Combined up/down - exactly the front windows' pattern (window_front_up/
+  # down in output.yaml): power on, wait for it to settle, pulse both
+  # sides together, then leave power on a while longer before dropping it,
+  # rather than the single-window buttons above which don't touch power
+  # at all.
+  - platform: template
+    name: "Rear Up"
+    id: rear_up
+    on_press:
+      then:
+        - script.execute: window_rear_up_script
+    web_server:
+      sorting_group_id: sorting_group_windows
+
+  - platform: template
+    name: "Rear Down"
+    id: rear_down
+    on_press:
+      then:
+        - script.execute: window_rear_down_script
+    web_server:
+      sorting_group_id: sorting_group_windows
+
+script:
+  - id: window_rear_up_script
+    mode: single
+    then:
+      - switch.turn_on: rear_power
+      - delay: 1s
+      - switch.turn_on: rear_left_up_relay
+      - switch.turn_on: rear_right_up_relay
+      - delay: 500ms
+      - switch.turn_off: rear_left_up_relay
+      - switch.turn_off: rear_right_up_relay
+      - delay: 30s
+      - switch.turn_off: rear_power
+
+  - id: window_rear_down_script
+    mode: single
+    then:
+      - switch.turn_on: rear_power
+      - delay: 1s
+      - switch.turn_on: rear_left_down_relay
+      - switch.turn_on: rear_right_down_relay
+      - delay: 500ms
+      - switch.turn_off: rear_left_down_relay
+      - switch.turn_off: rear_right_down_relay
+      - delay: 30s
+      - switch.turn_off: rear_power
+
+  # Named "Dash Shutdown Request" - the internal flag switch of that name
+  # (see output.yaml) is hidden from the UI, so this button is the one
+  # user-visible action for it, rather than having both a real action
+  # button and a raw internal-flag switch both visible and both named
+  # around "shutdown". Explicit manual request, so it ignores
+  # dash_stay_on_override rather than being silently blocked by it.
+  - platform: template
+    name: "Dash Shutdown Request"
+    on_press:
+      - script.execute: force_ice_shutdown_script
+    web_server:
+      sorting_group_id: sorting_group_gpio_control
+
+# Inverter must never silently come back on just because the ESP reset - if
+# it crashes/reboots while on, it should come back off, not whatever the
+# real relay happened to still be. restore_mode: DISABLED above only means
+# "don't force a remembered value", it doesn't force off - this does. Low
+# priority so it runs after the modbus bus/client_10 are up.
+#
+# Turning the local switch off isn't enough on its own though: dash's
+# inverter REQUEST coil (140, see modbus-dash.yaml) is a one-way flag dash
+# set the last time its button was clicked, and it doesn't know the ESP
+# rebooted - it's still sitting there true if the inverter was on before the
+# reset. The moment client_dash_requests' poll picks that stale coil back
+# up it calls inverter_power.turn_on() again, undoing this within a few
+# hundred ms. So also clear dash's request coil directly, and hold off
+# acting on that poll (dash_boot_guard_inverter, see modbus-dash.yaml) for a
+# few seconds to give the clear-write time to land before trusting it.
+esphome:
+  on_boot:
+    priority: -100
+    then:
+      # The inverter was still coming back on at boot despite this. Root
+      # cause - modbus_controller's one-shot switch writes have no retry at
+      # all: if the hub refuses the write (queue_command() just logs
+      # "Command refused by hub" and gives up), the relay never gets the
+      # off command, and boot is the single busiest moment on
+      # this bus (everything else is also initializing/polling at once, so a
+      # refusal here is likely, not a fluke). Retrying a few times with gaps
+      # is cheap (happens once, at boot) and makes it much more likely at
+      # least one attempt lands outside a congestion window.
+      - switch.turn_off: inverter_power
+      - delay: 500ms
+      - switch.turn_off: inverter_power
+      - delay: 500ms
+      - switch.turn_off: inverter_power
+      - modbus_client.write_multiple_coils:
+          address: 5
+          start_address: 140
+          values: !lambda 'return std::vector<bool>{false};'
+      - delay: 3s
+      - lambda: 'id(dash_boot_guard_inverter) = false;'

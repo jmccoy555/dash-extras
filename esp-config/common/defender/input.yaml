@@ -1,0 +1,334 @@
+pcf8574:
+  - id: "pcf8574_hub_in_1" # for input channel 1-16
+    i2c_id: bus_a
+    address: 0x24
+    pcf8575: true
+
+binary_sensor:
+  - platform: gpio
+    name: "Ignition 1"
+    id: ignition_1
+    pin:
+      pcf8574: pcf8574_hub_in_1
+      number: 0
+      mode: INPUT
+      inverted: false #true
+    filters:
+      - delayed_on: 100ms
+      - delayed_off: 5s
+    on_press:
+      then:
+        - wifi.disable:
+        - switch.turn_on: suspension_power
+        - switch.turn_on: charger_1
+        - switch.turn_on: charger_2
+        - switch.turn_on: inverter_power
+        - switch.turn_on: dash_power
+        - script.stop: ice_delayed_off_script # Cancel pending shutoff, if
+    on_release:
+      then:
+        #        - delay: 5s
+        - wifi.enable:
+        - switch.turn_off: suspension_power
+        - switch.turn_off: charger_1
+        - switch.turn_off: charger_2
+        #        - switch.turn_off: inverter_power
+        - script.execute: ice_delayed_off_script # Start countdown to shut off
+    web_server:
+      sorting_group_id: sorting_group_sensors
+
+  - platform: gpio
+    name: "Ignition 2"
+    id: ignition_2
+    pin:
+      pcf8574: pcf8574_hub_in_1
+      number: 1
+      mode: INPUT
+      inverted: false #true
+    on_press:
+      then:
+        - if:
+            condition:
+              switch.is_on: sidelights_auto
+            then:
+              - switch.turn_on: side_lights
+    on_release:
+      then:
+        - if:
+            condition:
+              switch.is_on: sidelights_auto
+            then:
+              - switch.turn_off: side_lights
+    web_server:
+      sorting_group_id: sorting_group_sensors
+
+  - platform: gpio
+    name: "Horn"
+    pin:
+      pcf8574: pcf8574_hub_in_1
+      number: 2
+      mode: INPUT
+      inverted: false #true
+    web_server:
+      sorting_group_id: sorting_group_sensors
+
+  - platform: gpio
+    name: "Side Lights"
+    pin:
+      pcf8574: pcf8574_hub_in_1
+      number: 3
+      mode: INPUT
+      inverted: false #true
+    on_press:
+      then:
+        - if:
+            condition:
+              switch.is_on: lightbar_auto_amber
+            then:
+              - switch.turn_on: lightbar_amber
+        - if:
+            condition:
+              switch.is_on: lightbar_auto_white
+            then:
+              - switch.turn_on: lightbar_white
+    on_release:
+      then:
+        - switch.turn_off: lightbar_amber
+        - switch.turn_off: lightbar_white
+    web_server:
+      sorting_group_id: sorting_group_frontlights
+
+  - platform: gpio
+    # name: "Low Beam"
+    id: low_beam_gpio
+    pin:
+      pcf8574: pcf8574_hub_in_1
+      number: 4
+      mode: INPUT
+      inverted: false #true
+    # web_server:
+    #   sorting_group_id: sorting_group_frontlights
+
+  - platform: template
+    name: "Low Beam"
+    lambda: |-
+      return id(ignition_2).state && id(low_beam_gpio).state;
+    web_server:
+      sorting_group_id: sorting_group_frontlights
+
+  - platform: gpio
+    name: "High Beam"
+    pin:
+      pcf8574: pcf8574_hub_in_1
+      number: 5
+      mode: INPUT
+      inverted: false #true
+    on_press:
+      then:
+        - if:
+            condition:
+              switch.is_on: lightbar_auto_main
+            then:
+              - switch.turn_on: lightbar_main
+    on_release:
+      then:
+        - switch.turn_off: lightbar_main
+    web_server:
+      sorting_group_id: sorting_group_frontlights
+
+  - platform: gpio
+    name: "Lock or Unlock"
+    id: lock_unlock
+    pin:
+      pcf8574: pcf8574_hub_in_1
+      number: 6
+      mode: INPUT
+      inverted: false # false if normal input, true if active-low
+    on_press:
+      then:
+        - lambda: |-
+            if (id(ignition_1).state == 0) {
+              id(pulse_counter) += 1;
+              id(last_pulse_time) = millis();
+            }
+        - script.execute: reset_pulse_counter # Execute pulse count reset after 10 seconds
+    web_server:
+      sorting_group_id: sorting_group_sensors
+
+  # - platform: gpio
+  #   name: "Lock / Unlock"
+  #   id: lock_unlock
+  #   pin:
+  #     pcf8574: pcf8574_hub_in_1
+  #     number: 6
+  #     mode: INPUT
+  #     inverted: false
+  #   on_press:
+  #     then:
+  #       - lambda: |-
+  #           if (id(ignition_1) == 0) {
+  #             id(pulse_counter) += 1;
+  #             id(last_pulse_time) = millis();
+  #             id(reset_pulse_counter)->execute();
+  #           }
+  #   web_server:
+  #     sorting_group_id: sorting_group_sensors
+
+  - platform: gpio
+    name: "Door Lights"
+    pin:
+      pcf8574: pcf8574_hub_in_1
+      number: 7
+      mode: INPUT
+      inverted: true
+    web_server:
+      sorting_group_id: sorting_group_sensors
+
+  - platform: gpio
+    name: "Door - Drivers"
+    pin:
+      pcf8574: pcf8574_hub_in_1
+      number: 8
+      mode: INPUT
+      inverted: true
+    web_server:
+      sorting_group_id: sorting_group_sensors
+
+  - platform: gpio
+    name: "Door - Passanger & Rear"
+    pin:
+      pcf8574: pcf8574_hub_in_1
+      number: 9
+      mode: INPUT
+      inverted: true
+    web_server:
+      sorting_group_id: sorting_group_sensors
+
+  # - platform: gpio  ####### disabled until new switch fitted
+  #   name: "Bonnet"
+  #   pin:
+  #     pcf8574: pcf8574_hub_in_1
+  #     number: 10
+  #     mode: INPUT
+  #     inverted: true
+  #   web_server:
+  #     sorting_group_id: sorting_group_sensors
+
+  # - platform: gpio
+  #   name: "b16m-input12"
+  #   pin:
+  #     pcf8574: pcf8574_hub_in_1
+  #     number: 11
+  #     mode: INPUT
+  #     inverted: false #true
+  #   web_server:
+  #     sorting_group_id: sorting_group_sensors
+
+  # - platform: gpio
+  #   name: "b16m-input13"
+  #   pin:
+  #     pcf8574: pcf8574_hub_in_1
+  #     number: 12
+  #     mode: INPUT
+  #     inverted: false #true
+  #   web_server:
+  #     sorting_group_id: sorting_group_sensors
+
+  # - platform: gpio
+  #   name: "b16m-input14"
+  #   pin:
+  #     pcf8574: pcf8574_hub_in_1
+  #     number: 13
+  #     mode: INPUT
+  #     inverted: false #true
+  #   web_server:
+  #     sorting_group_id: sorting_group_sensors
+
+  - platform: gpio
+    name: "Button"
+    pin:
+      pcf8574: pcf8574_hub_in_1
+      number: 14
+      mode: INPUT
+      inverted: true
+    on_click:
+      - min_length: 50ms
+        max_length: 350ms
+        then:
+          - switch.turn_on: dash_power
+          - script.stop: ice_delayed_off_script # Cancel pending shutoff
+          - script.execute: ice_delayed_off_script # Optional: restart countdown
+      - min_length: 500ms
+        max_length: 1000ms
+        then:
+          - switch.turn_off: dash_power
+    # on_double_click:
+    #   min_length: 50ms
+    #   max_length: 350ms
+    #   then:
+    #     - switch.turn_on: window_front_power
+    #     - button.press: window_driver_down
+    #     - button.press: window_passanger_down
+    #     - delay: 60s
+    #     - switch.turn_off: window_front_power
+
+    on_multi_click:
+      # Regular double click → Windows down
+      - timing:
+          - ON for at most 350ms
+          - OFF for at most 350ms
+          - ON for at most 350ms
+        then:
+          - script.execute: window_front_down_script
+
+      # First short + second long → Windows up
+      - timing:
+          - ON for at most 350ms
+          - OFF for at most 350ms
+          - ON for at least 500ms
+        then:
+          - script.execute: window_front_up_script
+
+    web_server:
+      sorting_group_id: sorting_group_sensors
+
+globals:
+  - id: pulse_counter
+    type: int
+    restore_value: no
+    initial_value: "0"
+
+  - id: last_pulse_time
+    type: unsigned long
+    restore_value: no
+    initial_value: "0"
+
+script:
+  - id: reset_pulse_counter
+    mode: restart
+    then:
+      - delay: 4s # Start 4-second window to count pulses
+      - lambda: |-
+          if (id(pulse_counter) == 1) {
+            id(inverter_power).turn_on();
+          } 
+          else if (id(pulse_counter) == 2) {
+            id(window_front_down_script).execute();
+          } 
+          else if (id(pulse_counter) == 3) {
+            // dash_power is routed through the guarded, graceful-shutdown
+            // script the idle timer uses (see output.yaml) so it respects
+            // dash_stay_on_override and gives dash a clean Modbus shutdown
+            // instead of hard power loss. inverter_power is cut directly
+            // here, same as before, unrelated to dash's own power.
+            id(graceful_ice_shutdown_script).execute();
+            id(inverter_power).turn_off();
+          }
+          else if (id(pulse_counter) >= 4) {
+            id(window_front_up_script).execute();
+          } 
+          else {
+            ESP_LOGI("pulse", "Pulse count is %d. No action triggered.", id(pulse_counter));
+          }
+          id(pulse_counter) = 0;
+      # - logger.log: "Pulse counter reset after 10 seconds."

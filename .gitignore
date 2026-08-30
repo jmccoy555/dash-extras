@@ -1,0 +1,11 @@
+# Real credentials - never commit. Copy the .example files to set these up.
+dash-gui/victron_secrets.py
+esp-config/secrets.yaml
+
+# Python
+__pycache__/
+*.pyc
+
+# Editor/OS cruft
+*.autosave
+.DS_Store

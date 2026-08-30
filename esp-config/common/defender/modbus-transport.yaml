@@ -1,0 +1,40 @@
+# The physical bus layer. This board (Kincony) only has one onboard RS485
+# transceiver, on GPIO13/14 - a second, non-isolated UART bridged onto the
+# same two-wire bus was previously used for a second Modbus role, but
+# caused cross-talk (frames meant for one role being heard by the other)
+# since a single modbus: instance can only be one role at a time. Now down
+# to one UART, one role: the ESP is the bus's only master, full stop,
+# including of dash (see the dash-gui project, which runs as a genuine
+# Modbus slave).
+uart:
+  - id: uart_client
+    tx_pin: GPIO13
+    rx_pin: GPIO14
+    baud_rate: 9600
+    stop_bits: 1
+    data_bits: 8
+    parity: NONE
+    debug:
+      direction: BOTH
+
+modbus:
+  - id: bus_client
+    uart_id: uart_client
+    role: client
+    # Defaults are 2000ms/600ms - built for slow, noisy industrial buses.
+    # A real transaction on this bus completes in well under 100ms, but the
+    # defaults meant one non-responding device could eat a full 2000ms
+    # before the hub gave up, and every successful transaction paid 600ms
+    # of mandatory turnaround before the next one could even start - at
+    # best ~1.5 transactions/sec for the whole bus, shared across every
+    # device on it. Tightened to match how fast this bus actually is when
+    # healthy, with margin still built in.
+    send_wait_time: 300ms
+    # turnaround_time under ~100ms starts occasionally cutting off the tail
+    # of a response before the sender has fully finished transmitting,
+    # which shows up as "Clearing buffer... timeout after partial response"
+    # on the receiving side followed by an immediate retry - looks like a
+    # duplicate frame on the wire but is really a retry after a
+    # too-tight turnaround truncated the original. 150ms avoids that while
+    # staying well under the 600ms default.
+    turnaround_time: 150ms

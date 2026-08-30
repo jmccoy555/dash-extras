@@ -1,0 +1,584 @@
+# What service_mode overrides, so turning it back off can restore it -
+# restore_value: true so this survives an ESP reboot that happens
+# mid-service (paired with service_mode's own restore_mode). Suspension
+# isn't in here - it's not Modbus (RS232 over USB, not sniffed/wired up yet).
+globals:
+  - id: svc_saved_lightbar_auto_main
+    type: bool
+    restore_value: true
+    initial_value: "false"
+  - id: svc_saved_lightbar_auto_amber
+    type: bool
+    restore_value: true
+    initial_value: "false"
+  - id: svc_saved_lightbar_auto_white
+    type: bool
+    restore_value: true
+    initial_value: "false"
+  - id: svc_saved_headlights_auto
+    type: bool
+    restore_value: true
+    initial_value: "false"
+  - id: svc_saved_sidelights_auto
+    type: bool
+    restore_value: true
+    initial_value: "false"
+  - id: svc_saved_inverter_power
+    type: bool
+    restore_value: true
+    initial_value: "false"
+  - id: svc_saved_charger_1
+    type: bool
+    restore_value: true
+    initial_value: "false"
+  - id: svc_saved_charger_2
+    type: bool
+    restore_value: true
+    initial_value: "false"
+  - id: svc_saved_suspension_service
+    type: bool
+    restore_value: true
+    initial_value: "false"
+
+pcf8574:
+  - id: "pcf8574_hub_out_1" # for output channel 1-16
+    i2c_id: bus_a
+    address: 0x25
+    pcf8575: true
+
+switch:
+  - platform: gpio
+    id: worklight_passanger_side
+    name: "Passanger Side"
+    pin:
+      pcf8574: pcf8574_hub_out_1
+      number: 0
+      mode: OUTPUT
+      inverted: true
+    restore_mode: ALWAYS_OFF
+    web_server:
+      sorting_group_id: sorting_group_worklights
+
+  - platform: gpio
+    id: worklight_drivers_side
+    name: "Drivers Side"
+    pin:
+      pcf8574: pcf8574_hub_out_1
+      number: 1
+      mode: OUTPUT
+      inverted: true
+    restore_mode: ALWAYS_OFF
+    web_server:
+      sorting_group_id: sorting_group_worklights
+
+  - platform: gpio
+    id: worklight_rear
+    name: "Rear"
+    pin:
+      pcf8574: pcf8574_hub_out_1
+      number: 2
+      mode: OUTPUT
+      inverted: true
+    restore_mode: ALWAYS_OFF
+    web_server:
+      sorting_group_id: sorting_group_worklights
+
+  - platform: gpio
+    id: worklight_bonnet
+    name: "Bonnet"
+    pin:
+      pcf8574: pcf8574_hub_out_1
+      number: 15
+      mode: OUTPUT
+      inverted: true
+    restore_mode: ALWAYS_OFF
+    web_server:
+      sorting_group_id: sorting_group_worklights
+
+  - platform: gpio
+    id: lightbar_white
+    name: "Marker White"
+    pin:
+      pcf8574: pcf8574_hub_out_1
+      number: 10
+      mode: OUTPUT
+      inverted: true
+    interlock:
+      - lightbar_white
+      - lightbar_amber
+    restore_mode: ALWAYS_OFF
+    web_server:
+      sorting_group_id: sorting_group_lightbar
+
+  - platform: gpio
+    id: lightbar_amber
+    name: "Marker Amber"
+    pin:
+      pcf8574: pcf8574_hub_out_1
+      number: 11
+      mode: OUTPUT
+      inverted: true
+    interlock:
+      - lightbar_white
+      - lightbar_amber
+    restore_mode: ALWAYS_OFF
+    web_server:
+      sorting_group_id: sorting_group_lightbar
+
+  - platform: gpio
+    id: lightbar_inner
+    name: "Lightbar Inner"
+    pin:
+      pcf8574: pcf8574_hub_out_1
+      number: 12
+      mode: OUTPUT
+      inverted: true
+    restore_mode: ALWAYS_OFF
+    web_server:
+      sorting_group_id: sorting_group_lightbar
+
+  - platform: gpio
+    id: lightbar_outer
+    name: "Lightbar Outer"
+    pin:
+      pcf8574: pcf8574_hub_out_1
+      number: 13
+      mode: OUTPUT
+      inverted: true
+    restore_mode: ALWAYS_OFF
+    web_server:
+      sorting_group_id: sorting_group_lightbar
+
+  - platform: gpio
+    id: window_front_power
+    name: "Front Power"
+    pin:
+      pcf8574: pcf8574_hub_out_1
+      number: 3
+      mode: OUTPUT
+      inverted: true
+    restore_mode: ALWAYS_OFF
+    web_server:
+      sorting_group_id: sorting_group_windows
+
+  - platform: gpio
+    id: window_driver_up_gpio
+    name: window_driver_up_gpio
+    internal: true
+    pin:
+      pcf8574: pcf8574_hub_out_1
+      number: 4
+      mode: OUTPUT
+      inverted: true
+    restore_mode: ALWAYS_OFF
+
+  - platform: gpio
+    id: window_driver_down_gpio
+    name: window_driver_down_gpio
+    internal: true
+    pin:
+      pcf8574: pcf8574_hub_out_1
+      number: 5
+      mode: OUTPUT
+      inverted: true
+    restore_mode: ALWAYS_OFF
+
+  - platform: gpio
+    id: window_passanger_up_gpio
+    name: window_passanger_up_gpio
+    internal: true
+    pin:
+      pcf8574: pcf8574_hub_out_1
+      number: 6
+      mode: OUTPUT
+      inverted: true
+    restore_mode: ALWAYS_OFF
+
+  - platform: gpio
+    id: window_passanger_down_gpio
+    name: window_passanger_down_gpio
+    internal: true
+    pin:
+      pcf8574: pcf8574_hub_out_1
+      number: 7
+      mode: OUTPUT
+      inverted: true
+    restore_mode: ALWAYS_OFF
+
+  - platform: gpio
+    id: side_lights
+    name: "Sidelights"
+    pin:
+      pcf8574: pcf8574_hub_out_1
+      number: 8
+      mode: OUTPUT
+      inverted: true
+    restore_mode: ALWAYS_OFF
+    web_server:
+      sorting_group_id: sorting_group_frontlights
+
+  - platform: gpio
+    id: low_beam
+    name: "Low Beam"
+    pin:
+      pcf8574: pcf8574_hub_out_1
+      number: 9
+      mode: OUTPUT
+      inverted: true
+    restore_mode: ALWAYS_OFF
+    web_server:
+      sorting_group_id: sorting_group_frontlights
+
+  - platform: gpio
+    id: dash_power
+    name: "Dash Power"
+    pin:
+      pcf8574: pcf8574_hub_out_1
+      number: 14
+      mode: OUTPUT
+      inverted: true
+    restore_mode: ALWAYS_OFF
+    web_server:
+      sorting_group_id: sorting_group_gpio_control
+
+  - platform: template
+    name: "Dash Stay On (No Timer)"
+    id: dash_stay_on_override
+    # Deliberately does not survive a reboot - if the ESP resets, this
+    # should never silently stay engaged without being re-confirmed.
+    restore_mode: ALWAYS_OFF
+    optimistic: true
+    turn_on_action:
+      - switch.turn_on: dash_power
+      - script.stop: ice_delayed_off_script
+    turn_off_action: []
+    web_server:
+      sorting_group_id: sorting_group_gpio_control
+
+  # Internal flag only - graceful_ice_shutdown_script/force_ice_shutdown_
+  # script set this before cutting dash_power, and dash polls it via modbus
+  # to know when to shut itself down cleanly. Never meant to be a
+  # user-facing toggle (turning it on/off directly does nothing on its
+  # own - the actual shutdown sequence lives in the scripts). Hidden from
+  # the web UI so it doesn't sit there confusingly next to the real
+  # shutdown button (the "Dash Shutdown Request" button in
+  # modbus-client.yaml, which does the actual sequence).
+  - platform: template
+    name: "Dash Shutdown Request"
+    id: dash_shutdown_request
+    internal: true
+    restore_mode: ALWAYS_OFF
+    optimistic: true
+    turn_on_action: []
+    turn_off_action: []
+
+  - platform: template
+    name: "Lightbar Main"
+    id: lightbar_main
+    optimistic: true
+    turn_on_action:
+      - switch.turn_on: lightbar_inner
+      - switch.turn_on: lightbar_outer
+    turn_off_action:
+      - switch.turn_off: lightbar_inner
+      - switch.turn_off: lightbar_outer
+    restore_mode: ALWAYS_OFF
+    web_server:
+      sorting_group_id: sorting_group_lightbar
+
+  - platform: template
+    name: "Lightbar Auto Main"
+    id: lightbar_auto_main
+    restore_mode: RESTORE_DEFAULT_OFF
+    optimistic: true
+    turn_on_action: []
+    turn_off_action: []
+    web_server:
+      sorting_group_id: sorting_group_lightbar
+
+  - platform: template
+    name: "Lightbar Auto Amber"
+    id: lightbar_auto_amber
+    restore_mode: RESTORE_DEFAULT_OFF
+    optimistic: true
+    turn_on_action:
+      - switch.turn_off: lightbar_auto_white
+    turn_off_action: []
+    web_server:
+      sorting_group_id: sorting_group_lightbar
+
+  - platform: template
+    name: "Lightbar Auto White"
+    id: lightbar_auto_white
+    restore_mode: RESTORE_DEFAULT_OFF
+    optimistic: true
+    turn_on_action:
+      - switch.turn_off: lightbar_auto_amber
+    turn_off_action: []
+    web_server:
+      sorting_group_id: sorting_group_lightbar
+
+  - platform: template
+    name: "Headlights Auto"
+    id: headlights_auto
+    restore_mode: RESTORE_DEFAULT_OFF
+    optimistic: true
+    # Placeholder until a light sensor is fitted - the switch exists now
+    # so its state is real and Service mode can disable it, but nothing
+    # acts on it yet.
+    turn_on_action: []
+    turn_off_action: []
+    web_server:
+      sorting_group_id: sorting_group_frontlights
+
+  - platform: template
+    name: "Sidelights Auto"
+    id: sidelights_auto
+    restore_mode: RESTORE_DEFAULT_OFF
+    optimistic: true
+    # The actual linkage to ignition_2 lives on ignition_2's own on_press/
+    # on_release in input.yaml, same pattern as lightbar_auto_main/amber/white.
+    turn_on_action: []
+    turn_off_action: []
+    web_server:
+      sorting_group_id: sorting_group_frontlights
+
+  - platform: template
+    name: "Service Mode"
+    id: service_mode
+    # A temporary override, not a one-shot trigger: turning it back off
+    # reverts everything to what it was before. restore_mode + the
+    # svc_saved_* globals (restore_value: true) mean both "are we in
+    # service mode" and "what to revert to" survive an ESP reboot mid-service.
+    # Suspension mode select (low/normal/high/level) isn't touched - it's
+    # RS232, not Modbus. Suspension Service is a real coil though, so it is.
+    restore_mode: RESTORE_DEFAULT_OFF
+    optimistic: true
+    turn_on_action:
+      - lambda: |-
+          id(svc_saved_lightbar_auto_main) = id(lightbar_auto_main).state;
+          id(svc_saved_lightbar_auto_amber) = id(lightbar_auto_amber).state;
+          id(svc_saved_lightbar_auto_white) = id(lightbar_auto_white).state;
+          id(svc_saved_headlights_auto) = id(headlights_auto).state;
+          id(svc_saved_sidelights_auto) = id(sidelights_auto).state;
+          id(svc_saved_inverter_power) = id(inverter_power).state;
+          id(svc_saved_charger_1) = id(charger_1).state;
+          id(svc_saved_charger_2) = id(charger_2).state;
+          id(svc_saved_suspension_service) = id(suspension_service).state;
+      - switch.turn_off: lightbar_auto_main
+      - switch.turn_off: lightbar_auto_amber
+      - switch.turn_off: lightbar_auto_white
+      - switch.turn_off: headlights_auto
+      - switch.turn_off: sidelights_auto
+      - switch.turn_on: suspension_service
+      - delay: 200ms
+      - switch.turn_off: inverter_power
+      - delay: 200ms
+      - switch.turn_off: charger_1
+      - delay: 200ms
+      - switch.turn_off: charger_2
+    turn_off_action:
+      - if:
+          condition:
+            lambda: 'return id(svc_saved_suspension_service);'
+          then:
+            - switch.turn_on: suspension_service
+          else:
+            - switch.turn_off: suspension_service
+      - delay: 200ms
+      - if:
+          condition:
+            lambda: 'return id(svc_saved_inverter_power);'
+          then:
+            - switch.turn_on: inverter_power
+      - delay: 200ms
+      - if:
+          condition:
+            lambda: 'return id(svc_saved_charger_1);'
+          then:
+            - switch.turn_on: charger_1
+      - delay: 200ms
+      - if:
+          condition:
+            lambda: 'return id(svc_saved_charger_2);'
+          then:
+            - switch.turn_on: charger_2
+      - if:
+          condition:
+            lambda: 'return id(svc_saved_lightbar_auto_main);'
+          then:
+            - switch.turn_on: lightbar_auto_main
+      - if:
+          condition:
+            lambda: 'return id(svc_saved_lightbar_auto_amber);'
+          then:
+            - switch.turn_on: lightbar_auto_amber
+      - if:
+          condition:
+            lambda: 'return id(svc_saved_lightbar_auto_white);'
+          then:
+            - switch.turn_on: lightbar_auto_white
+      - if:
+          condition:
+            lambda: 'return id(svc_saved_headlights_auto);'
+          then:
+            - switch.turn_on: headlights_auto
+      - if:
+          condition:
+            lambda: 'return id(svc_saved_sidelights_auto);'
+          then:
+            - switch.turn_on: sidelights_auto
+    web_server:
+      sorting_group_id: sorting_group_gpio_control
+
+
+button:
+  - platform: template
+    name: "Driver Up"
+    id: window_driver_up
+    on_press:
+      then:
+        - switch.turn_on: window_driver_up_gpio
+        - delay: 500ms
+        - switch.turn_off: window_driver_up_gpio
+    web_server:
+      sorting_group_id: sorting_group_windows
+
+  - platform: template
+    name: "Driver Down"
+    id: window_driver_down
+    on_press:
+      then:
+        - switch.turn_on: window_driver_down_gpio
+        - delay: 500ms
+        - switch.turn_off: window_driver_down_gpio
+    web_server:
+      sorting_group_id: sorting_group_windows
+
+  - platform: template
+    name: "Passanger Up"
+    id: window_passanger_up
+    on_press:
+      then:
+        - switch.turn_on: window_passanger_up_gpio
+        - delay: 500ms
+        - switch.turn_off: window_passanger_up_gpio
+    web_server:
+      sorting_group_id: sorting_group_windows
+
+  - platform: template
+    name: "Passanger Down"
+    id: window_passanger_down
+    on_press:
+      then:
+        - switch.turn_on: window_passanger_down_gpio
+        - delay: 500ms
+        - switch.turn_off: window_passanger_down_gpio
+    web_server:
+      sorting_group_id: sorting_group_windows
+
+  - platform: template
+    name: "Front Up"
+    id: window_front_up
+    on_press:
+      then:
+        - script.execute: window_front_up_script
+    web_server:
+      sorting_group_id: sorting_group_windows
+
+  - platform: template
+    name: "Front Down"
+    id: window_front_down
+    on_press:
+      then:
+        - script.execute: window_front_down_script
+    web_server:
+      sorting_group_id: sorting_group_windows
+
+# Script to delay power-off
+script:
+  - id: ice_delayed_off_script
+    mode: restart
+    then:
+      - delay: 1800s # 30 minutes
+      - script.execute: graceful_ice_shutdown_script
+
+  # Shared by the idle timer above and the 3x-lock-pulse gesture in
+  # input.yaml (reset_pulse_counter) - anything that wants to cut ICE
+  # power should come through here so it always respects the stay-on
+  # override and always gives dash a clean Modbus-triggered shutdown
+  # instead of pulling power straight away.
+  - id: graceful_ice_shutdown_script
+    mode: restart
+    then:
+      - if:
+          condition:
+            switch.is_off: dash_stay_on_override
+          then:
+            # Tell dash to shut itself down cleanly first (it polls this
+            # coil over Modbus), then give it 2 minutes before actually
+            # cutting power, instead of pulling power straight away and
+            # risking storage corruption.
+            - switch.turn_on: dash_shutdown_request
+            - delay: 120s
+            - switch.turn_off: dash_power
+            - switch.turn_off: dash_shutdown_request
+
+  # For the "Dash Shutdown Request" button (modbus-client.yaml) - an
+  # explicit manual request to shut down now, so it skips the
+  # dash_stay_on_override check entirely (unlike graceful_ice_shutdown_
+  # script above) rather than silently doing nothing because the override
+  # happened to be on. Still gives dash its clean Modbus-triggered
+  # shutdown before cutting power.
+  - id: force_ice_shutdown_script
+    mode: restart
+    then:
+      - switch.turn_on: dash_shutdown_request
+      - delay: 120s
+      - switch.turn_off: dash_power
+      - switch.turn_off: dash_shutdown_request
+
+  - id: window_front_up_script
+    mode: single
+    then:
+      - switch.turn_on: window_front_power
+      - delay: 1s
+      - switch.turn_on: window_driver_up_gpio
+      - switch.turn_on: window_passanger_up_gpio
+      - delay: 500ms
+      - switch.turn_off: window_driver_up_gpio
+      - switch.turn_off: window_passanger_up_gpio
+      - delay: 30s
+      - switch.turn_off: window_front_power
+
+  - id: window_front_down_script
+    mode: single
+    then:
+      - switch.turn_on: window_front_power
+      - delay: 1s
+      - switch.turn_on: window_driver_down_gpio
+      - switch.turn_on: window_passanger_down_gpio
+      - delay: 500ms
+      - switch.turn_off: window_driver_down_gpio
+      - switch.turn_off: window_passanger_down_gpio
+      - delay: 30s
+      - switch.turn_off: window_front_power
+
+
+web_server:
+  sorting_groups:
+    - id: sorting_group_gpio_control
+      name: "Control"
+      sorting_weight: 29
+    - id: sorting_group_windows
+      name: "Windows"
+      sorting_weight: 20
+    - id: sorting_group_worklights
+      name: "Worklights"
+      sorting_weight: 21
+    - id: sorting_group_frontlights
+      name: "Front Lights"
+      sorting_weight: 22
+    - id: sorting_group_lightbar
+      name: "Lightbar"
+      sorting_weight: 23

@@ -1,0 +1,26 @@
+one_wire:
+  - platform: gpio
+    pin: GPIO16
+
+web_server:
+  sorting_groups:
+    - id: sorting_group_sensors
+      name: "Sensors"
+      sorting_weight: 20
+
+sensor:
+  - platform: dallas_temp
+    address: 0xfc00000035d61628
+    name: "Outside Temperature"
+    id: temperature_outside
+    update_interval: 30s
+    web_server:
+      sorting_group_id: sorting_group_sensors
+    accuracy_decimals: 1
+
+    # If you don't smooth the temperature readings
+    # the PID controller over reacts to small changes.
+    filters:
+      - exponential_moving_average:
+          alpha: 0.1
+          send_every: 1
