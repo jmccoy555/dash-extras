@@ -443,6 +443,10 @@ class Ui_MainWindow(object):
         sizePolicy.setHeightForWidth(self.tabWidget.sizePolicy().hasHeightForWidth())
         self.tabWidget.setSizePolicy(sizePolicy)
         self.tabWidget.setObjectName("tabWidget")
+        self.tabWidget.setStyleSheet(
+            "QTabBar::tab { background: #444; color: white; padding: 6px; }"
+            "QTabBar::tab:selected { background: #0a0; }"
+        )
         self.tab = QtWidgets.QWidget()
         self.tab.setObjectName("tab")
         self.gridLayout = QtWidgets.QGridLayout(self.tab)
@@ -573,6 +577,10 @@ class Ui_MainWindow(object):
         sizePolicy.setHeightForWidth(self.tabWidget_2.sizePolicy().hasHeightForWidth())
         self.tabWidget_2.setSizePolicy(sizePolicy)
         self.tabWidget_2.setObjectName("tabWidget_2")
+        self.tabWidget_2.setStyleSheet(
+            "QTabBar::tab { background: #444; color: white; padding: 6px; }"
+            "QTabBar::tab:selected { background: #0a0; }"
+        )
         self.tab_3 = QtWidgets.QWidget()
         self.tab_3.setObjectName("tab_3")
         self.gridLayout_13 = QtWidgets.QGridLayout(self.tab_3)
