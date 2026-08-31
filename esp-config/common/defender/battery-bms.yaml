@@ -38,19 +38,19 @@ sensor:
     jbd_bms_ble_id: aux_battery_jbd_ble
     total_voltage:
       id: bms_voltage
-      internal: true
+      name: "AUX Battery Voltage"
     current:
       id: bms_current
-      internal: true
+      name: "AUX Battery Current"
     capacity_remaining:
       id: bms_capacity_remaining
-      internal: true
+      name: "AUX Battery Capacity Remaining"
     nominal_capacity:
       id: bms_capacity_full
-      internal: true
+      name: "AUX Battery Capacity Full"
     state_of_charge:
       id: bms_soc
-      internal: true
+      name: "AUX Battery SOC"
 
 # Pushed to dash as registers 4-7 (1-3 are outside/inside temp and
 # humidity, see modbus-dash.yaml), *100 scaled like those - current can be
