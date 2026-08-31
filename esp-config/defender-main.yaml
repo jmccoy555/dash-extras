@@ -38,11 +38,14 @@ packages:
   # genuine Modbus slave (see the dash-gui project) rather than the ESP
   # exposing a server for dash to poll.
   modbus-dash: !include common/defender/modbus-dash.yaml
-  # Uses an active ble_client connection, the same class of workload as the
-  # Victron BLE decryption that was confirmed to corrupt the Modbus bus
-  # when it ran on this ESP - watch the Modbus log closely after flashing;
-  # revert immediately (comment this back out) if "Clearing buffer" /
-  # garbled frames show up the same way that test did.
+  # Initially suspected of corrupting the bus the same way Victron's BLE
+  # decryption did (a single response frame repeating in a tight garbage
+  # loop, "Clearing buffer... parse failed") and briefly reverted - but
+  # restarting dash on its own cleared the symptom, which points at a
+  # stuck-retransmission bug in dash's own pymodbus serial handling rather
+  # than the ESP's BLE workload actually corrupting the physical bus (see
+  # conversation). Re-enabled; if the same symptom recurs and restarting
+  # dash does NOT clear it, that would point back at this after all.
   battery-bms: !include common/defender/battery-bms.yaml
 
 i2c:
