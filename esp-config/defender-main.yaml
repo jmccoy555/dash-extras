@@ -23,6 +23,12 @@ packages:
   # genuine Modbus slave (see the dash-gui project) rather than the ESP
   # exposing a server for dash to poll.
   modbus-dash: !include common/defender/modbus-dash.yaml
+  # NOT YET DEPLOYED - see the warning at the top of battery-bms.yaml
+  # before uncommenting this. Uses an active ble_client connection, the
+  # same class of workload as the Victron BLE decryption that was
+  # confirmed to corrupt the Modbus bus when it ran on this ESP - flash
+  # and watch the Modbus log closely, same as that test.
+  # battery-bms: !include common/defender/battery-bms.yaml
 
 i2c:
   - id: bus_a

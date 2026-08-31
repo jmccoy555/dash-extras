@@ -70,3 +70,20 @@ the new path with `ls /dev/v4l/by-id/` and update `DEVICE` in
 Note: the Anker webcam can only be used by one consumer at a time. Don't
 point the dash app's own Camera page at it while the dashcam service is
 running (or vice versa) - they'll fight over the device.
+
+### AUX battery BMS
+
+The AUX/leisure battery has its own built-in JBD BMS, read over BLE
+directly (not via the Victron shunt) - see `AUX_BATTERY_BMS_MAC` in
+`dash-gui/victron_secrets.py` and `JbdBmsPoller` in `dash_app.py`. This
+protocol isn't encrypted, so no bindkey is needed, just the MAC.
+
+`esp-config/common/defender/battery-bms.yaml` is a **not-yet-deployed**
+alternative: reading the same BMS from the ESP's own BLE radio instead,
+and pushing it to dash over the already-reliable Modbus link - would
+sidestep the Rock5B-side issue of its one Bluetooth adapter having to
+share time between Android Auto's phone connection and BLE scanning,
+which has proven unreliable running both at once. Don't enable it without
+reading the warning at the top of that file first - it's the same class
+of BLE workload as the Victron decryption that previously corrupted the
+Modbus bus on this ESP.

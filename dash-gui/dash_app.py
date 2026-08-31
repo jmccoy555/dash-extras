@@ -343,7 +343,12 @@ class JbdBmsPoller(QThread):
     RX_UUID = "0000ff01-0000-1000-8000-00805f9b34fb"
     TX_UUID = "0000ff02-0000-1000-8000-00805f9b34fb"
     CMD_MAIN = bytes([0xDD, 0xA5, 0x03, 0x00, 0xFF, 0xFD, 0x77])
-    POLL_INTERVAL_S = 5
+    # A fresh connect-request-disconnect cycle each poll, not a held-open
+    # connection re-requested repeatedly - tried that (see git history) and
+    # this BMS silently stopped responding after the first request on a
+    # reused connection, for reasons unclear. 3s (down from the original
+    # 5s) is as fast as seems safe without risking the same issue.
+    POLL_INTERVAL_S = 3
 
     def __init__(self, mac):
         super().__init__()
@@ -365,8 +370,14 @@ class JbdBmsPoller(QThread):
             await asyncio.sleep(self.POLL_INTERVAL_S)
 
     async def _poll_once(self):
-        device = await BleakScanner.find_device_by_address(self.mac, timeout=10.0)
+        # find_device_by_address proved unreliable in this environment (it
+        # silently returned None even while the device was live and a
+        # general discover() found it fine) - discover() + filtering by
+        # address is slower per call but actually works.
+        devices = await BleakScanner.discover(timeout=8.0)
+        device = next((d for d in devices if d.address.lower() == self.mac), None)
         if device is None:
+            print(f"[jbd-bms] not found this scan ({len(devices)} devices seen)", flush=True)
             return
 
         response = bytearray()
@@ -383,17 +394,25 @@ class JbdBmsPoller(QThread):
             try:
                 await asyncio.wait_for(done.wait(), timeout=5.0)
             except asyncio.TimeoutError:
+                print("[jbd-bms] connected but no response to request", flush=True)
                 return
 
             buf = bytes(response)
             if len(buf) < 23 or buf[0:2] != b"\xdd\x03":
+                print(f"[jbd-bms] bad response ({len(buf)} bytes): {buf.hex()}", flush=True)
                 return
             payload = buf[4:-3]
             voltage = int.from_bytes(payload[0:2], "big") / 100
-            current = -int.from_bytes(payload[2:4], "big", signed=True) / 100
+            # Sign flipped from the reference implementation (see git
+            # history) - confirmed backwards against the real battery: this
+            # protocol reports negative while discharging, positive while
+            # charging, matching the convention the rest of this app (and
+            # the Victron devices) already use.
+            current = int.from_bytes(payload[2:4], "big", signed=True) / 100
             remaining_ah = int.from_bytes(payload[4:6], "big") / 100
             full_ah = int.from_bytes(payload[6:8], "big") / 100
             soc = payload[19]
+            print(f"[jbd-bms] OK: {voltage}V {current}A {soc}% {remaining_ah}/{full_ah}Ah", flush=True)
             self.battery_signal.emit(voltage, current, float(soc), remaining_ah, full_ah)
 
     def stop(self):
