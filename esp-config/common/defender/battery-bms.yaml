@@ -1,6 +1,3 @@
-# NOT YET DEPLOYED - written up for review, needs manual testing before it
-# goes anywhere near the live ESP (see conversation).
-#
 # Reads the AUX/leisure battery's own built-in JBD BMS directly on the ESP,
 # instead of the Rock5B polling it over its own Bluetooth (which shares an
 # adapter with Android Auto's phone connection and has proven unreliable
@@ -10,11 +7,11 @@
 # *** REAL RISK: this uses ble_client, an ACTIVE BLE connection (connect,
 # subscribe, write) - broadly the same class of workload as the Victron BLE
 # decryption that was confirmed, live, to cause severe Modbus bus
-# corruption when enabled on this same ESP (see conversation - that's why
-# Victron support was reverted entirely). This has NOT been tested against
-# that failure mode. Flash this, then immediately watch the Modbus log for
+# corruption when enabled on this same ESP (that's why Victron support was
+# reverted entirely). Watch the Modbus log closely after flashing for
 # "Clearing buffer" / garbled frames the same way the Victron test was
-# checked - if it corrupts the bus, revert immediately, same as Victron.
+# checked - if it corrupts the bus, revert immediately (comment the include
+# back out in defender-main.yaml), same as Victron.
 #
 # MAC address is the same one already in dash-gui's victron_secrets.py
 # (AUX_BATTERY_BMS_MAC) - not a real secret (this protocol isn't
