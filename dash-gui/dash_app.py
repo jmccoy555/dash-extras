@@ -30,6 +30,7 @@ from PyQt5.QtCore import Qt, QTimer, QThread
 from gui import Ui_MainWindow
 from victron_ble.scanner import Scanner
 from victron_ble.exceptions import AdvertisementKeyMissingError, UnknownDeviceError
+from bleak import BleakClient, BleakScanner
 import victron_secrets
 
 from pymodbus.datastore import ModbusSequentialDataBlock, ModbusSlaveContext, ModbusServerContext
@@ -327,6 +328,79 @@ class VictronBlePoller(QThread):
         self.wait()
 
 
+class JbdBmsPoller(QThread):
+    # The AUX/leisure battery's built-in JBD BMS, read directly over BLE
+    # instead of via the Victron shunt (see conversation) - the SOC/Ah
+    # numbers matched the battery's own labelled capacity exactly when this
+    # was tested against the real hardware. Unlike Victron this needs an
+    # active GATT connection (write a command, wait for the notify reply)
+    # rather than passive advertisement scanning, since JBD doesn't
+    # broadcast its data - reconnects and keeps polling on any failure
+    # (BMS going briefly out of range, etc.) rather than giving up.
+    from PyQt5.QtCore import pyqtSignal
+    battery_signal = pyqtSignal(float, float, float, float, float)  # voltage, current, soc, remaining_ah, full_ah
+
+    RX_UUID = "0000ff01-0000-1000-8000-00805f9b34fb"
+    TX_UUID = "0000ff02-0000-1000-8000-00805f9b34fb"
+    CMD_MAIN = bytes([0xDD, 0xA5, 0x03, 0x00, 0xFF, 0xFD, 0x77])
+    POLL_INTERVAL_S = 5
+
+    def __init__(self, mac):
+        super().__init__()
+        self.running = True
+        self.mac = mac.lower()
+
+    def run(self):
+        try:
+            asyncio.run(self._main())
+        except Exception as e:
+            print(f"[jbd-bms] poller failed: {e}", flush=True)
+
+    async def _main(self):
+        while self.running:
+            try:
+                await self._poll_once()
+            except Exception as e:
+                print(f"[jbd-bms] {e}", flush=True)
+            await asyncio.sleep(self.POLL_INTERVAL_S)
+
+    async def _poll_once(self):
+        device = await BleakScanner.find_device_by_address(self.mac, timeout=10.0)
+        if device is None:
+            return
+
+        response = bytearray()
+        done = asyncio.Event()
+
+        def handle_notify(_, data):
+            response.extend(data)
+            if response.endswith(b"\x77"):
+                done.set()
+
+        async with BleakClient(device) as client:
+            await client.start_notify(self.RX_UUID, handle_notify)
+            await client.write_gatt_char(self.TX_UUID, self.CMD_MAIN)
+            try:
+                await asyncio.wait_for(done.wait(), timeout=5.0)
+            except asyncio.TimeoutError:
+                return
+
+            buf = bytes(response)
+            if len(buf) < 23 or buf[0:2] != b"\xdd\x03":
+                return
+            payload = buf[4:-3]
+            voltage = int.from_bytes(payload[0:2], "big") / 100
+            current = -int.from_bytes(payload[2:4], "big", signed=True) / 100
+            remaining_ah = int.from_bytes(payload[4:6], "big") / 100
+            full_ah = int.from_bytes(payload[6:8], "big") / 100
+            soc = payload[19]
+            self.battery_signal.emit(voltage, current, float(soc), remaining_ah, full_ah)
+
+    def stop(self):
+        self.running = False
+        self.wait()
+
+
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
@@ -405,6 +479,10 @@ class MainWindow(QMainWindow):
         self.victron_poller.solar_signal.connect(self.handle_solar_update)
         self.victron_poller.inverter_signal.connect(self.handle_inverter_update)
         self.victron_poller.start()
+
+        self.jbd_bms_poller = JbdBmsPoller(mac=victron_secrets.AUX_BATTERY_BMS_MAC)
+        self.jbd_bms_poller.battery_signal.connect(self.handle_jbd_battery_update)
+        self.jbd_bms_poller.start()
 
         self.battery_labels = [self.ui.batterySOC, self.ui.batteryTTG, self.ui.batteryVoltage,
                                 self.ui.batteryConsumed, self.ui.batteryCurrent, self.ui.batteryPower,
@@ -618,21 +696,28 @@ class MainWindow(QMainWindow):
                 label.setText(self.victron_stale_text[label])
 
     def handle_battery_update(self, voltage, current, soc, consumed_ah, remaining_mins, main_battery_voltage):
+        # Victron's shunt still owns the starter/main battery reading (it's
+        # on the same device's aux terminal) - the AUX/leisure battery
+        # fields below are now fed by the JBD BMS instead (see
+        # handle_jbd_battery_update and conversation).
         self._last_battery_update = time.monotonic()
-        self.ui.batteryVoltage.setText(f"Voltage: {voltage:.2f} V")
-        self.ui.batteryCurrent.setText(f"Current: {current:.2f} A")
-        self.ui.batterySOC.setText(f"SOC: {soc:.0f} %")
-        self.ui.batteryConsumed.setText(f"Consumed: {consumed_ah:.1f} Ah")
-        self.ui.batteryPower.setText(f"Power: {voltage * current:.0f} W")
-        if remaining_mins is None:
-            self.ui.batteryTTG.setText("TTG: N/A")
-        else:
-            hours, mins = divmod(int(remaining_mins), 60)
-            self.ui.batteryTTG.setText(f"TTG: {hours}h {mins}m")
         if main_battery_voltage is None:
             self.ui.mainBatteryVoltage.setText("Voltage: N/A")
         else:
             self.ui.mainBatteryVoltage.setText(f"Voltage: {main_battery_voltage:.2f} V")
+
+    def handle_jbd_battery_update(self, voltage, current, soc, remaining_ah, full_ah):
+        self._last_battery_update = time.monotonic()
+        self.ui.batteryVoltage.setText(f"Voltage: {voltage:.2f} V")
+        self.ui.batteryCurrent.setText(f"Current: {current:.2f} A")
+        self.ui.batterySOC.setText(f"SOC: {soc:.0f} %")
+        self.ui.batteryConsumed.setText(f"Consumed: {full_ah - remaining_ah:.1f} Ah")
+        self.ui.batteryPower.setText(f"Power: {voltage * current:.0f} W")
+        if current < 0:
+            hours, mins = divmod(int(remaining_ah / -current * 60), 60)
+            self.ui.batteryTTG.setText(f"TTG: {hours}h {mins}m")
+        else:
+            self.ui.batteryTTG.setText("TTG: N/A")
 
     def handle_charger_aux_update(self, voltage, current):
         self._last_charger_aux_update = time.monotonic()
@@ -672,6 +757,7 @@ class MainWindow(QMainWindow):
 
     def closeEvent(self, event):
         self.victron_poller.stop()
+        self.jbd_bms_poller.stop()
         super().closeEvent(event)
 
 

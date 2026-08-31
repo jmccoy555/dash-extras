@@ -17,3 +17,8 @@ INVERTER_KEY = "REPLACE_WITH_YOUR_BINDKEY"
 
 CHARGER_AUX_MAC = "XX:XX:XX:XX:XX:XX"
 CHARGER_AUX_KEY = "REPLACE_WITH_YOUR_BINDKEY"
+
+# Not a Victron device - the AUX/leisure battery's own built-in JBD BMS,
+# read directly instead of via the Victron shunt. No bindkey needed, this
+# protocol isn't encrypted.
+AUX_BATTERY_BMS_MAC = "XX:XX:XX:XX:XX:XX"
