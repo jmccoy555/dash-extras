@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="UTF-8"?>
+<?xml version='1.0' encoding='UTF-8'?>
 <ui version="4.0">
  <class>MainWindow</class>
  <widget class="QMainWindow" name="MainWindow">
@@ -24,7 +24,7 @@
 QWidget {
     background-color: #121212;
     color: #e0e0e0;
-    font-family: &quot;Segoe UI&quot;, Tahoma, Geneva, Verdana, sans-serif;
+    font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
     font-size: 13pt;
 }
 
@@ -76,7 +76,7 @@ QLabel {
   <widget class="QWidget" name="centralwidget">
    <layout class="QVBoxLayout" name="mainLayout">
     <item>
-     <widget class="QWidget" name="main" native="true">
+     <widget class="QWidget" name="main">
       <property name="sizePolicy">
        <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
         <horstretch>1</horstretch>
@@ -91,7 +91,7 @@ QLabel {
       </property>
       <layout class="QVBoxLayout" name="verticalLayout">
        <item>
-        <widget class="QWidget" name="climate" native="true">
+        <widget class="QWidget" name="climate">
          <property name="sizePolicy">
           <sizepolicy hsizetype="Expanding" vsizetype="Minimum">
            <horstretch>1</horstretch>
@@ -264,7 +264,7 @@ QLabel {
                    </font>
                   </property>
                   <property name="text">
-                   <string>Amber</string>
+                   <string>Marker Amber</string>
                   </property>
                  </widget>
                 </item>
@@ -284,7 +284,7 @@ QLabel {
                    </font>
                   </property>
                   <property name="text">
-                   <string>White</string>
+                   <string>Marker White</string>
                   </property>
                  </widget>
                 </item>
@@ -313,11 +313,51 @@ QLabel {
                   <property name="sizePolicy">
                    <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
                     <horstretch>1</horstretch>
-                    <verstretch>2</verstretch>
+                    <verstretch>1</verstretch>
                    </sizepolicy>
                   </property>
                   <property name="text">
                    <string>Lightbar</string>
+                  </property>
+                 </widget>
+                </item>
+                <item row="3" column="0">
+                 <widget class="QPushButton" name="sideLights">
+                  <property name="sizePolicy">
+                   <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
+                    <horstretch>1</horstretch>
+                    <verstretch>1</verstretch>
+                   </sizepolicy>
+                  </property>
+                  <property name="font">
+                   <font>
+                    <family>Segoe UI</family>
+                    <pointsize>13</pointsize>
+                    <bold>true</bold>
+                   </font>
+                  </property>
+                  <property name="text">
+                   <string>Sidelights</string>
+                  </property>
+                 </widget>
+                </item>
+                <item row="3" column="1">
+                 <widget class="QPushButton" name="headlights">
+                  <property name="sizePolicy">
+                   <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
+                    <horstretch>1</horstretch>
+                    <verstretch>1</verstretch>
+                   </sizepolicy>
+                  </property>
+                  <property name="font">
+                   <font>
+                    <family>Segoe UI</family>
+                    <pointsize>13</pointsize>
+                    <bold>true</bold>
+                   </font>
+                  </property>
+                  <property name="text">
+                   <string>Headlights</string>
                   </property>
                  </widget>
                 </item>
@@ -584,13 +624,13 @@ QLabel {
                  <verstretch>2</verstretch>
                 </sizepolicy>
                </property>
+               <property name="styleSheet">
+                <string notr="true">QTabBar::tab { background: #444; color: white; padding: 6px; }QTabBar::tab:selected { background: #0a0; }</string>
+               </property>
                <property name="currentIndex">
                 <number>0</number>
                </property>
                <widget class="QWidget" name="tab">
-                <attribute name="title">
-                 <string>Front Windows</string>
-                </attribute>
                 <layout class="QGridLayout" name="gridLayout">
                  <item row="1" column="0">
                   <widget class="QPushButton" name="windowFrontUp">
@@ -684,8 +724,104 @@ QLabel {
                   </widget>
                  </item>
                 </layout>
+                <attribute name="title">
+                 <string>Front Windows</string>
+                </attribute>
                </widget>
                <widget class="QWidget" name="tab_2">
+                <layout class="QGridLayout" name="gridLayout_rear">
+                 <item row="0" column="0" colspan="2">
+                  <widget class="QPushButton" name="rearPower">
+                   <property name="sizePolicy">
+                    <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
+                     <horstretch>0</horstretch>
+                     <verstretch>0</verstretch>
+                    </sizepolicy>
+                   </property>
+                   <property name="text">
+                    <string>Power</string>
+                   </property>
+                  </widget>
+                 </item>
+                 <item row="1" column="0">
+                  <widget class="QPushButton" name="rearUp">
+                   <property name="sizePolicy">
+                    <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
+                     <horstretch>0</horstretch>
+                     <verstretch>0</verstretch>
+                    </sizepolicy>
+                   </property>
+                   <property name="text">
+                    <string>Up</string>
+                   </property>
+                  </widget>
+                 </item>
+                 <item row="1" column="1">
+                  <widget class="QPushButton" name="rearDown">
+                   <property name="sizePolicy">
+                    <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
+                     <horstretch>0</horstretch>
+                     <verstretch>0</verstretch>
+                    </sizepolicy>
+                   </property>
+                   <property name="text">
+                    <string>Down</string>
+                   </property>
+                  </widget>
+                 </item>
+                 <item row="2" column="0">
+                  <widget class="QPushButton" name="rearLeftUp">
+                   <property name="sizePolicy">
+                    <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
+                     <horstretch>0</horstretch>
+                     <verstretch>0</verstretch>
+                    </sizepolicy>
+                   </property>
+                   <property name="text">
+                    <string>Left Up</string>
+                   </property>
+                  </widget>
+                 </item>
+                 <item row="2" column="1">
+                  <widget class="QPushButton" name="rearRightUp">
+                   <property name="sizePolicy">
+                    <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
+                     <horstretch>0</horstretch>
+                     <verstretch>0</verstretch>
+                    </sizepolicy>
+                   </property>
+                   <property name="text">
+                    <string>Right Up</string>
+                   </property>
+                  </widget>
+                 </item>
+                 <item row="3" column="0">
+                  <widget class="QPushButton" name="rearLeftDown">
+                   <property name="sizePolicy">
+                    <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
+                     <horstretch>0</horstretch>
+                     <verstretch>0</verstretch>
+                    </sizepolicy>
+                   </property>
+                   <property name="text">
+                    <string>Left Down</string>
+                   </property>
+                  </widget>
+                 </item>
+                 <item row="3" column="1">
+                  <widget class="QPushButton" name="rearRightDown">
+                   <property name="sizePolicy">
+                    <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
+                     <horstretch>0</horstretch>
+                     <verstretch>0</verstretch>
+                    </sizepolicy>
+                   </property>
+                   <property name="text">
+                    <string>Right Down</string>
+                   </property>
+                  </widget>
+                 </item>
+                </layout>
                 <attribute name="title">
                  <string>Rear Windows</string>
                 </attribute>
@@ -700,13 +836,13 @@ QLabel {
                  <verstretch>1</verstretch>
                 </sizepolicy>
                </property>
+               <property name="styleSheet">
+                <string notr="true">QTabBar::tab { background: #444; color: white; padding: 6px; }QTabBar::tab:selected { background: #0a0; }</string>
+               </property>
                <property name="currentIndex">
                 <number>1</number>
                </property>
                <widget class="QWidget" name="tab_3">
-                <attribute name="title">
-                 <string>Tab 1</string>
-                </attribute>
                 <layout class="QGridLayout" name="gridLayout_13">
                  <item row="1" column="1">
                   <widget class="QPushButton" name="pushButton_15">
@@ -735,11 +871,11 @@ QLabel {
                   </widget>
                  </item>
                 </layout>
+                <attribute name="title">
+                 <string>Tab 1</string>
+                </attribute>
                </widget>
                <widget class="QWidget" name="tab_4">
-                <attribute name="title">
-                 <string>Tab 2</string>
-                </attribute>
                 <layout class="QHBoxLayout" name="horizontalLayout_2">
                  <item>
                   <widget class="QPushButton" name="pushButton_19">
@@ -768,6 +904,9 @@ QLabel {
                   </widget>
                  </item>
                 </layout>
+                <attribute name="title">
+                 <string>Tab 2</string>
+                </attribute>
                </widget>
               </widget>
              </item>
@@ -1003,7 +1142,7 @@ QLabel {
            </widget>
           </item>
           <item>
-           <widget class="QFrame" name="frame">
+           <widget class="QFrame" name="frame1">
             <property name="sizePolicy">
              <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
               <horstretch>1</horstretch>
@@ -1232,6 +1371,40 @@ QLabel {
             </property>
             <layout class="QGridLayout" name="gridLayout_12">
              <item row="0" column="0">
+              <widget class="QGroupBox" name="groupBox_main_battery">
+               <property name="sizePolicy">
+                <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
+                 <horstretch>2</horstretch>
+                 <verstretch>2</verstretch>
+                </sizepolicy>
+               </property>
+               <property name="font">
+                <font>
+                 <family>Segoe UI</family>
+                 <pointsize>13</pointsize>
+                </font>
+               </property>
+               <property name="title">
+                <string>Battery Main</string>
+               </property>
+               <property name="alignment">
+                <set>Qt::AlignCenter</set>
+               </property>
+               <layout class="QGridLayout" name="gridLayout_main_battery">
+                <item row="0" column="0">
+                 <widget class="QLabel" name="mainBatteryVoltage">
+                  <property name="text">
+                   <string>Voltage</string>
+                  </property>
+                  <property name="alignment">
+                   <set>Qt::AlignCenter</set>
+                  </property>
+                 </widget>
+                </item>
+               </layout>
+              </widget>
+             </item>
+             <item row="1" column="0">
               <widget class="QGroupBox" name="groupBox_4">
                <property name="sizePolicy">
                 <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
@@ -1246,7 +1419,7 @@ QLabel {
                 </font>
                </property>
                <property name="title">
-                <string>Battery</string>
+                <string>Battery AUX</string>
                </property>
                <property name="alignment">
                 <set>Qt::AlignCenter</set>
@@ -1333,7 +1506,7 @@ QLabel {
                </layout>
               </widget>
              </item>
-             <item row="1" column="0">
+             <item row="2" column="0">
               <widget class="QGroupBox" name="groupBox_5">
                <property name="sizePolicy">
                 <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
@@ -1399,7 +1572,7 @@ QLabel {
                </layout>
               </widget>
              </item>
-             <item row="2" column="0">
+             <item row="3" column="0">
               <widget class="QGroupBox" name="groupBox_6">
                <property name="sizePolicy">
                 <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
@@ -1458,7 +1631,7 @@ QLabel {
                </layout>
               </widget>
              </item>
-             <item row="3" column="0">
+             <item row="4" column="0">
               <widget class="QGroupBox" name="groupBox_7">
                <property name="sizePolicy">
                 <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
@@ -1522,6 +1695,6 @@ QLabel {
    </layout>
   </widget>
  </widget>
- <resources/>
- <connections/>
+ <resources />
+ <connections />
 </ui>

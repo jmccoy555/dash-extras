@@ -21,17 +21,71 @@
 
 import sys
 import time
+import datetime
 import asyncio
 import threading
 import logging
+
+# When launched normally (via dash's own Launcher, not a terminal), the
+# parent redirects our stdout/stderr fds to /dev/null before exec - every
+# print()/logging call below was silently going nowhere, with no way to
+# diagnose a live failure (e.g. the BLE pollers) short of manually running
+# this script from a shell instead. Reassigning sys.stdout/stderr here binds
+# fresh fds to a real file regardless of what the parent did to fd 1/2.
+try:
+    _log_file = open("/tmp/dash_app.log", "a", buffering=1)
+    sys.stdout = _log_file
+    sys.stderr = _log_file
+except OSError:
+    pass
+
 logging.basicConfig(level=logging.WARNING, format="%(asctime)s %(name)s %(levelname)s %(message)s")
 from PyQt5.QtWidgets import QApplication, QMainWindow, QLabel
 from PyQt5.QtCore import Qt, QTimer, QThread
 from gui import Ui_MainWindow
 from victron_ble.scanner import Scanner
 from victron_ble.exceptions import AdvertisementKeyMissingError, UnknownDeviceError
-from bleak import BleakClient, BleakScanner
+from bleak import BleakScanner
+from bleak.args.bluez import BlueZScannerArgs
 import victron_secrets
+import subprocess
+
+# Second USB BT dongle (Cambridge Silicon Radio) dedicated to BLE scanning
+# (Victron + JBD BMS) - hci0 (the original Realtek dongle, already paired
+# with the phone) is left alone for Android Auto. Sharing one adapter
+# between AA's phone connection and continuous BLE scanning proved
+# unreliable (see conversation).
+#
+# hciN numbering is NOT stable across reboots - confirmed live: after one
+# reboot the onboard (non-functional) UART Bluetooth chip enumerated as
+# hci2, taking the slot this dongle previously had, which silently broke
+# all BLE scanning (adapter existed but was DOWN). Resolve by this dongle's
+# own fixed MAC instead of hardcoding a name, so it survives re-enumeration.
+BLE_ADAPTER_MAC = "00:1a:7d:da:71:13"
+
+
+def resolve_ble_adapter(mac, fallback="hci0"):
+    try:
+        output = subprocess.run(
+            ["hciconfig", "-a"], capture_output=True, text=True, timeout=5
+        ).stdout
+    except Exception as e:
+        print(f"[ble] hciconfig failed ({e}), falling back to {fallback}", flush=True)
+        return fallback
+    current = None
+    for line in output.splitlines():
+        if line and not line[0].isspace():
+            current = line.split(":", 1)[0]
+        elif "BD Address:" in line and current:
+            found_mac = line.split("BD Address:")[1].split()[0]
+            if found_mac.lower() == mac.lower():
+                print(f"[ble] resolved {mac} -> {current}", flush=True)
+                return current
+    print(f"[ble] {mac} not found in hciconfig -a, falling back to {fallback}", flush=True)
+    return fallback
+
+
+BLE_ADAPTER = resolve_ble_adapter(BLE_ADAPTER_MAC)
 
 from pymodbus.datastore import ModbusSequentialDataBlock, ModbusSlaveContext, ModbusServerContext
 from pymodbus.server import StartSerialServer
@@ -45,6 +99,14 @@ BAUD_RATE = 9600
 REG_OUTSIDE_TEMP = 1   # plain int, no scaling
 REG_INSIDE_TEMP = 2    # *10 scaled, same convention as the master version
 REG_INSIDE_HUMID = 3   # *10 scaled
+# AUX/leisure battery's JBD BMS, read by the ESP's own BLE radio and pushed
+# here instead of dash polling it directly - see battery-bms.yaml. All *100
+# scaled; current is signed (negative = discharging), so must be decoded as
+# int16, not the plain uint16 the other registers use.
+REG_BMS_VOLTAGE = 4
+REG_BMS_CURRENT = 5
+REG_BMS_SOC = 6
+REG_BMS_CAPACITY_REMAINING = 7
 
 # Coils (function code 1) - dash writes on click (a request), the ESP reads
 # it, actions the real device, and writes back the confirmed state (which
@@ -126,6 +188,11 @@ COIL_OLGA_PHONE = 49        # ESP-write-only
 # range; only toggle_button() touches the request range.
 REQUEST_COIL_OFFSET = 100
 
+COIL_NAMES = {addr: name for name, addr in COIL_MAP.items()}
+AUTOMODE_COILS = {
+    COIL_MAP["sidelightsAuto"], COIL_MAP["lightbarAutoMain"],
+    COIL_MAP["lightbarAutoAmber"], COIL_MAP["lightbarAutoWhite"],
+}
 COIL_TABLE_SIZE = 164
 REGISTER_TABLE_SIZE = 16
 UI_REFRESH_MS = 200  # cheap local memory reads - no bus cost to going fast
@@ -256,6 +323,14 @@ class VictronBlePoller(QThread):
                 outer._handle(address, parsed)
 
         scanner = _InnerScanner(self.device_keys)
+        # victron_ble's BaseScanner hardcodes its own BleakScanner with no
+        # way to pass adapter= through the constructor - swap it out before
+        # starting so this pins to the dedicated BLE dongle instead of
+        # whichever adapter BlueZ treats as default.
+        scanner._scanner = BleakScanner(
+            detection_callback=scanner._detection_callback,
+            bluez=BlueZScannerArgs(adapter=BLE_ADAPTER),
+        )
         await scanner.start()
         try:
             while self.running:
@@ -328,103 +403,35 @@ class VictronBlePoller(QThread):
         self.wait()
 
 
-class JbdBmsPoller(QThread):
-    # The AUX/leisure battery's built-in JBD BMS, read directly over BLE
-    # instead of via the Victron shunt (see conversation) - the SOC/Ah
-    # numbers matched the battery's own labelled capacity exactly when this
-    # was tested against the real hardware. Unlike Victron this needs an
-    # active GATT connection (write a command, wait for the notify reply)
-    # rather than passive advertisement scanning, since JBD doesn't
-    # broadcast its data - reconnects and keeps polling on any failure
-    # (BMS going briefly out of range, etc.) rather than giving up.
-    from PyQt5.QtCore import pyqtSignal
-    battery_signal = pyqtSignal(float, float, float, float, float)  # voltage, current, soc, remaining_ah, full_ah
-
-    RX_UUID = "0000ff01-0000-1000-8000-00805f9b34fb"
-    TX_UUID = "0000ff02-0000-1000-8000-00805f9b34fb"
-    CMD_MAIN = bytes([0xDD, 0xA5, 0x03, 0x00, 0xFF, 0xFD, 0x77])
-    # A fresh connect-request-disconnect cycle each poll, not a held-open
-    # connection re-requested repeatedly - tried that (see git history) and
-    # this BMS silently stopped responding after the first request on a
-    # reused connection, for reasons unclear. 3s (down from the original
-    # 5s) is as fast as seems safe without risking the same issue.
-    POLL_INTERVAL_S = 3
-
-    def __init__(self, mac):
-        super().__init__()
-        self.running = True
-        self.mac = mac.lower()
-
-    def run(self):
-        try:
-            asyncio.run(self._main())
-        except Exception as e:
-            print(f"[jbd-bms] poller failed: {e}", flush=True)
-
-    async def _main(self):
-        while self.running:
-            try:
-                await self._poll_once()
-            except Exception as e:
-                print(f"[jbd-bms] {e}", flush=True)
-            await asyncio.sleep(self.POLL_INTERVAL_S)
-
-    async def _poll_once(self):
-        # find_device_by_address proved unreliable in this environment (it
-        # silently returned None even while the device was live and a
-        # general discover() found it fine) - discover() + filtering by
-        # address is slower per call but actually works.
-        devices = await BleakScanner.discover(timeout=8.0)
-        device = next((d for d in devices if d.address.lower() == self.mac), None)
-        if device is None:
-            print(f"[jbd-bms] not found this scan ({len(devices)} devices seen)", flush=True)
-            return
-
-        response = bytearray()
-        done = asyncio.Event()
-
-        def handle_notify(_, data):
-            response.extend(data)
-            if response.endswith(b"\x77"):
-                done.set()
-
-        async with BleakClient(device) as client:
-            await client.start_notify(self.RX_UUID, handle_notify)
-            await client.write_gatt_char(self.TX_UUID, self.CMD_MAIN)
-            try:
-                await asyncio.wait_for(done.wait(), timeout=5.0)
-            except asyncio.TimeoutError:
-                print("[jbd-bms] connected but no response to request", flush=True)
-                return
-
-            buf = bytes(response)
-            if len(buf) < 23 or buf[0:2] != b"\xdd\x03":
-                print(f"[jbd-bms] bad response ({len(buf)} bytes): {buf.hex()}", flush=True)
-                return
-            payload = buf[4:-3]
-            voltage = int.from_bytes(payload[0:2], "big") / 100
-            # Sign flipped from the reference implementation (see git
-            # history) - confirmed backwards against the real battery: this
-            # protocol reports negative while discharging, positive while
-            # charging, matching the convention the rest of this app (and
-            # the Victron devices) already use.
-            current = int.from_bytes(payload[2:4], "big", signed=True) / 100
-            remaining_ah = int.from_bytes(payload[4:6], "big") / 100
-            full_ah = int.from_bytes(payload[6:8], "big") / 100
-            soc = payload[19]
-            print(f"[jbd-bms] OK: {voltage}V {current}A {soc}% {remaining_ah}/{full_ah}Ah", flush=True)
-            self.battery_signal.emit(voltage, current, float(soc), remaining_ah, full_ah)
-
-    def stop(self):
-        self.running = False
-        self.wait()
-
-
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.ui = Ui_MainWindow()
         self.ui.setupUi(self)
+
+        # Added here rather than in gui.ui/gui.py - that generated pair has
+        # drifted out of sync with each other (gui.ui is missing several
+        # real widgets gui.py has, predating this session - see
+        # conversation), so regenerating from gui.ui would delete working
+        # UI. Cheapest safe way to add a widget until that's untangled.
+        self.dateTimeLabel = QLabel(self.ui.climate)
+        self.dateTimeLabel.setFont(self.ui.tempLabel.font())
+        self.dateTimeLabel.setAlignment(Qt.AlignCenter)
+        # Without matching the temp labels' Expanding/Expanding size policy,
+        # this shrinks to fit its text instead of filling its slot in the
+        # row - leaving the plain (undyed) parent widget background visible
+        # around it.
+        self.dateTimeLabel.setSizePolicy(self.ui.tempLabel.sizePolicy())
+        # The generic QSS QLabel rule (#1e1e1e) isn't actually what the
+        # sibling labels show - refresh_from_datastore calls set_label_ok()/
+        # set_label_error() on them every tick, which sets an explicit
+        # per-widget stylesheet (#444 grey, or #a00 red while stale) that
+        # overrides the generic rule entirely. A clock has no stale/error
+        # state, so it never gets that call - apply the same "ok" style
+        # once here instead of leaving it on the generic (visibly darker)
+        # fallback (see conversation - "needs the right background").
+        self.set_label_ok(self.dateTimeLabel)
+        self.ui.horizontalLayout.addWidget(self.dateTimeLabel)
 
         coils = TrackedDataBlock(0, [False] * COIL_TABLE_SIZE, status_cutoff=REQUEST_COIL_OFFSET)
         holding_regs = TrackedDataBlock(0, [0] * REGISTER_TABLE_SIZE)
@@ -499,9 +506,11 @@ class MainWindow(QMainWindow):
         self.victron_poller.inverter_signal.connect(self.handle_inverter_update)
         self.victron_poller.start()
 
-        self.jbd_bms_poller = JbdBmsPoller(mac=victron_secrets.AUX_BATTERY_BMS_MAC)
-        self.jbd_bms_poller.battery_signal.connect(self.handle_jbd_battery_update)
-        self.jbd_bms_poller.start()
+        # No longer polled directly (JbdBmsPoller, removed) - the BMS only
+        # accepts one BLE connection at a time, and the ESP now reads it
+        # over its own separate BLE radio and pushes the numbers here over
+        # Modbus (registers 4-7, see refresh_from_datastore and
+        # battery-bms.yaml) instead of competing with the ESP for it.
 
         self.battery_labels = [self.ui.batterySOC, self.ui.batteryTTG, self.ui.batteryVoltage,
                                 self.ui.batteryConsumed, self.ui.batteryCurrent, self.ui.batteryPower,
@@ -558,7 +567,14 @@ class MainWindow(QMainWindow):
         self.sensor_stale_after = 30  # seconds since the ESP last wrote any of 1-3
         self.relay_stale_after = 30   # seconds since the ESP last wrote any coil
 
-        self.button_states = {button: False for button, _ in self.relay_buttons}
+        # Deliberately empty, not pre-seeded with False for every button -
+        # refresh_from_datastore's first_observation check (button not in
+        # button_states) relies on a real absence to tell "never seen this
+        # button's actual state yet" apart from "genuinely observed False",
+        # otherwise every button looks like a already-observed change on the
+        # very first status read after startup (see conversation - this was
+        # the actual reason the automode-echo fix there didn't work).
+        self.button_states = {}
         # How long to trust an optimistic click over the status coil before
         # giving up on it (see toggle_button/refresh_from_datastore - the ESP
         # only notices a click on its next request-coil poll, then has to
@@ -576,6 +592,14 @@ class MainWindow(QMainWindow):
         self.ble_staleness_timer = QTimer(self)
         self.ble_staleness_timer.timeout.connect(self._check_ble_staleness)
         self.ble_staleness_timer.start(5000)
+
+        self.datetime_timer = QTimer(self)
+        self.datetime_timer.timeout.connect(self._update_datetime)
+        self.datetime_timer.start(1000)
+        self._update_datetime()
+
+    def _update_datetime(self):
+        self.dateTimeLabel.setText(datetime.datetime.now().strftime("%a %d %b  %H:%M:%S"))
 
     # --- local datastore access (function-code 1 = coils, 3 = holding regs) ---
     def _read_coil(self, address):
@@ -626,6 +650,8 @@ class MainWindow(QMainWindow):
         relay_stale = (now - self.coils.last_write_time) > self.relay_stale_after if self.coils.last_write_time else True
         for button, coil in self.relay_buttons:
             state = self._read_coil(coil)
+            if coil in AUTOMODE_COILS and self.button_states.get(button) is True and state is False:
+                print(f"[automode] {COIL_NAMES.get(coil, coil)} observed going OFF (was ON) - relay_stale={relay_stale}", flush=True)
             if relay_stale:
                 if getattr(button, "_prev_error", None) is not True:
                     self.set_error_style(button)
@@ -642,6 +668,19 @@ class MainWindow(QMainWindow):
                     continue
                 if pending:
                     self.button_pending_until.pop(button, None)
+                # button_states has no entry for this button yet on the very
+                # first non-stale observation after startup - that's not a
+                # "the ESP changed something behind our back" event, it's
+                # just dash finding out what the ESP's state already is. The
+                # echo-write below must not fire for it: on restart, every
+                # currently-active coil (worklights left on, auto-modes
+                # enabled, etc.) would otherwise get a request-coil write it
+                # never asked for, and any ESP-side entity that isn't a pure
+                # level switch (a toggle/automation-triggering one, as the
+                # automode coils apparently are - see conversation, "auto
+                # modes being cleared" on every dash restart) applies that as
+                # a real command instead of the no-op it's meant to be.
+                first_observation = button not in self.button_states
                 if getattr(button, "_prev_error", None) is not False or self.button_states.get(button) != state:
                     self.update_button_style(button, state)
                     button._prev_error = False
@@ -656,7 +695,18 @@ class MainWindow(QMainWindow):
                     # conversation - "press amber again and it fails").
                     # Re-sync it to match the real state we just observed so
                     # the next click is a genuine transition again.
-                    if coil not in MOMENTARY_COILS:
+                    # Automode coils are excluded outright, not just guarded
+                    # by first_observation - logging (above) caught this
+                    # echo-write actually firing mid-flap during a live
+                    # automode-clearing episode, with the real ESP-pushed
+                    # status for these bouncing True/False within
+                    # milliseconds at the source (see conversation - ruled
+                    # out a local read race, pymodbus's datastore is a plain
+                    # list slice, atomic under the GIL). Whatever's flapping
+                    # the source value, dash re-writing into it on every
+                    # observed flip is at best pointless and at worst adds
+                    # fuel - safest to never touch these four at all here.
+                    if coil not in MOMENTARY_COILS and not first_observation and coil not in AUTOMODE_COILS:
                         self._write_coil(coil + REQUEST_COIL_OFFSET, state)
                 self.button_states[button] = state
 
@@ -689,6 +739,19 @@ class MainWindow(QMainWindow):
             self.set_label_ok(self.ui.tempLabel)
             self.set_label_ok(self.ui.humidityLabel)
             self.set_label_ok(self.ui.outsideTempLabel)
+
+            bms_voltage, bms_current, bms_soc, bms_remaining = self._read_registers(REG_BMS_VOLTAGE, 4)
+            if bms_current >= 32768:  # signed int16 (see REG_BMS_CURRENT)
+                bms_current -= 65536
+            voltage = bms_voltage / 100.0
+            current = bms_current / 100.0
+            soc = bms_soc / 100.0
+            remaining_ah = bms_remaining / 100.0
+            # The ESP doesn't push a full-capacity register (see
+            # conversation) - remaining_ah/soc reconstructs it from the
+            # BMS's own numbers rather than needing another register/flash.
+            full_ah = remaining_ah / (soc / 100.0) if soc > 0 else remaining_ah
+            self.handle_jbd_battery_update(voltage, current, soc, remaining_ah, full_ah)
 
         count = sum(1 for c in (COIL_JAMES_FOB, COIL_JAMES_PHONE, COIL_OLGA_FOB, COIL_OLGA_PHONE) if self._read_coil(c))
         self.ui.bleCountLabel.setText(f"BLE: {count}")
@@ -728,9 +791,9 @@ class MainWindow(QMainWindow):
     def handle_jbd_battery_update(self, voltage, current, soc, remaining_ah, full_ah):
         self._last_battery_update = time.monotonic()
         self.ui.batteryVoltage.setText(f"Voltage: {voltage:.2f} V")
-        self.ui.batteryCurrent.setText(f"Current: {current:.2f} A")
         self.ui.batterySOC.setText(f"SOC: {soc:.0f} %")
         self.ui.batteryConsumed.setText(f"Consumed: {full_ah - remaining_ah:.1f} Ah")
+        self.ui.batteryCurrent.setText(f"Current: {current:.2f} A")
         self.ui.batteryPower.setText(f"Power: {voltage * current:.0f} W")
         if current < 0:
             hours, mins = divmod(int(remaining_ah / -current * 60), 60)
@@ -741,9 +804,12 @@ class MainWindow(QMainWindow):
     def handle_charger_aux_update(self, voltage, current):
         self._last_charger_aux_update = time.monotonic()
         self.ui.chargerVoltage.setText(f"Voltage: {voltage:.2f} V")
-        self.ui.chargerCurrent.setText(f"Current: {current:.2f} A")
         self.ui.chargerConsumed.setText("Consumed: N/A")  # device has no Ah counter (see conversation)
-        self.ui.chargerPower.setText(f"Power: {voltage * current:.0f} W")
+        # Same display-sign flip as the battery panel above - this device
+        # reports negative while actively charging, but "charging" should
+        # read positive here (see conversation).
+        self.ui.chargerCurrent.setText(f"Current: {-current:.2f} A")
+        self.ui.chargerPower.setText(f"Power: {-voltage * current:.0f} W")
 
     def handle_solar_update(self, state_text, voltage, current, power, yield_today):
         self._last_solar_update = time.monotonic()
@@ -776,7 +842,6 @@ class MainWindow(QMainWindow):
 
     def closeEvent(self, event):
         self.victron_poller.stop()
-        self.jbd_bms_poller.stop()
         super().closeEvent(event)
 
 
