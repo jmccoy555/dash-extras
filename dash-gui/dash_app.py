@@ -88,7 +88,7 @@ def resolve_ble_adapter(mac, fallback="hci0"):
 BLE_ADAPTER = resolve_ble_adapter(BLE_ADAPTER_MAC)
 
 from pymodbus.datastore import ModbusSequentialDataBlock, ModbusSlaveContext, ModbusServerContext
-from pymodbus.server import StartSerialServer
+from pymodbus.server import ModbusSerialServer
 from pymodbus import FramerType
 
 SLAVE_ADDRESS = 5  # provisional - must match the ESP's client entry for dash
@@ -223,37 +223,113 @@ class TrackedDataBlock(ModbusSequentialDataBlock):
             self.last_write_time = now
 
 
+class ModbusFloodWatchdog(logging.Handler):
+    # pymodbus has a long-standing class of bug (confirmed live tonight on
+    # both 3.7.4 and 3.9.2, different failure shapes each time - a stuck
+    # framer buffer reprocessing/re-responding to the same data over and
+    # over, or an outright crash on a malformed frame that leaves the
+    # transport wedged) where it gets stuck logging errors far faster than
+    # any real bus transaction could ever happen. At 9600 baud an ~8-byte
+    # frame takes ~8ms even back-to-back, so more than a handful of
+    # ERROR-level pymodbus log records inside 200ms is physically
+    # impossible from real traffic - it can only mean the server is stuck,
+    # not that the bus is unusually busy. "Restart dash and it goes away"
+    # was confirmed live, twice, as a reliable recovery - this automates
+    # that specific recovery without needing a full process restart (which
+    # would require manually relaunching via the Launcher every time, see
+    # conversation - EmbeddedApp has no way to notice and re-embed a fresh
+    # window on its own).
+    WINDOW_S = 0.2
+    THRESHOLD = 15
+
+    def __init__(self, on_flood):
+        super().__init__(level=logging.ERROR)
+        self.on_flood = on_flood
+        self._timestamps = []
+
+    def emit(self, record):
+        now = time.monotonic()
+        self._timestamps.append(now)
+        cutoff = now - self.WINDOW_S
+        self._timestamps = [t for t in self._timestamps if t >= cutoff]
+        if len(self._timestamps) >= self.THRESHOLD:
+            self._timestamps = []
+            self.on_flood()
+
+
 class ModbusSlaveServerThread(QThread):
-    # Runs the RTU slave server for the life of the app. No graceful stop
-    # implemented yet (see conversation) - this is still an experimental
-    # first draft, and the process exiting is enough to close the port.
+    # Runs the RTU slave server for the life of the app, reopening the
+    # serial port and building a fresh ModbusSerialServer whenever
+    # request_restart() is called (see ModbusFloodWatchdog above) instead
+    # of the previous single StartSerialServer() call with no way to
+    # recover from a stuck server short of killing the whole process.
     def __init__(self, server_context):
         super().__init__()
         self.server_context = server_context
+        self.server = None
+        self.running = True
+        self._restart_requested = threading.Event()
 
     def run(self):
         try:
-            StartSerialServer(
-                context=self.server_context,
-                framer=FramerType.RTU,
+            asyncio.run(self._main())
+        except Exception as e:
+            print(f"[modbus-slave] server failed: {e}", flush=True)
+
+    async def _main(self):
+        while self.running:
+            self._restart_requested.clear()
+            self.server = ModbusSerialServer(
+                self.server_context,
+                FramerType.RTU,
                 port=SERIAL_PORT,
                 baudrate=BAUD_RATE,
                 bytesize=8,
                 parity="N",
                 stopbits=1,
                 timeout=1,
-                # RS485 is multi-drop - dash's port sees every frame on the bus,
-                # not just ones addressed to it (address 5). Without this,
-                # pymodbus's default behaviour is to actively transmit a
-                # GatewayNoResponse exception for every request meant for
-                # someone else (the relay boards at 10/20) - garbage bytes
-                # injected onto the wire on top of their real responses (see
-                # conversation - a likely major contributor to the RTU framing
-                # corruption diagnosed earlier tonight).
+                # RS485 is multi-drop - dash's port sees every frame on the
+                # bus, not just ones addressed to it (address 5). Without
+                # this, pymodbus's default behaviour is to actively
+                # transmit a GatewayNoResponse exception for every request
+                # meant for someone else (the relay boards at 10/20) -
+                # garbage bytes injected onto the wire on top of their real
+                # responses (see conversation - a likely major contributor
+                # to the RTU framing corruption diagnosed earlier tonight).
                 ignore_missing_slaves=True,
             )
-        except Exception as e:
-            print(f"[modbus-slave] server failed: {e}", flush=True)
+            watcher = asyncio.ensure_future(self._watch_for_restart())
+            try:
+                await self.server.serve_forever()
+            except Exception as e:
+                print(f"[modbus-slave] serve_forever raised: {e}", flush=True)
+            finally:
+                watcher.cancel()
+            self.server = None
+            if self.running:
+                print("[modbus-slave] reopening port fresh", flush=True)
+                await asyncio.sleep(0.5)
+
+    async def _watch_for_restart(self):
+        # Polls a plain threading.Event rather than needing a cross-thread
+        # asyncio call - request_restart() (called from the watchdog's
+        # logging callback, on this same thread) just needs to be safe to
+        # call from anywhere, and Event.set() already is.
+        while True:
+            if self._restart_requested.is_set():
+                print("[modbus-slave] flood watchdog triggered a restart", flush=True)
+                await self.server.shutdown()
+                return
+            await asyncio.sleep(0.1)
+
+    def request_restart(self):
+        if self.server is not None:
+            self._restart_requested.set()
+
+    def stop(self):
+        self.running = False
+        self._restart_requested.set()
+        self.wait()
 
 
 class VictronBlePoller(QThread):
@@ -448,12 +524,24 @@ class MainWindow(QMainWindow):
             # coil by one address (see conversation). The ESP sends plain
             # 0-based PDU addresses like everything modern does, so this
             # needs to be True to match.
+            #
+            # Tried upgrading to 3.9.2 to chase a stuck-retransmission bug
+            # (see conversation) - zero_mode was removed there (compensated
+            # by constructing blocks at address=1 instead, verified working
+            # empirically), but 3.9.2's framer then crashed outright with an
+            # unhandled struct.error on a malformed/truncated frame (very
+            # plausible on this shared multi-drop bus) and got stuck in a
+            # broken state - worse than the original bug, not better.
+            # Reverted to 3.7.4 and this zero_mode=True line.
             zero_mode=True,
         )
         self.server_context = ModbusServerContext(slaves={SLAVE_ADDRESS: slave_ctx}, single=False)
 
         self.server_thread = ModbusSlaveServerThread(self.server_context)
         self.server_thread.start()
+
+        self.modbus_flood_watchdog = ModbusFloodWatchdog(self.server_thread.request_restart)
+        logging.getLogger("pymodbus.logging").addHandler(self.modbus_flood_watchdog)
 
         # Designer's label ("Coffee") for this button was never right.
         self.ui.inverterPower.setText("Inverter")
@@ -842,6 +930,7 @@ class MainWindow(QMainWindow):
 
     def closeEvent(self, event):
         self.victron_poller.stop()
+        self.server_thread.stop()
         super().closeEvent(event)
 
 
