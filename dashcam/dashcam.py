@@ -15,6 +15,12 @@ import time
 # reboots depending on USB enumeration order. Find the current one with
 # `ls /dev/v4l/by-id/` if the camera is ever replaced.
 DEVICE = "/dev/v4l/by-id/usb-Anker_PowerConf_C200_Anker_PowerConf_C200_ACNV9P1D24137607-video-index0"
+# Same webcam's built-in mic, captured via PipeWire's pulse-compatible
+# interface. This is an *input* capture, unrelated to whatever's using the
+# audio *output* (Android Auto, Local player) - recording a mic doesn't
+# compete for the speaker, so it doesn't hit the same overlap/focus issue
+# as two things trying to play out loud at once (see conversation).
+AUDIO_SOURCE = "alsa_input.usb-Anker_PowerConf_C200_Anker_PowerConf_C200_ACNV9P1D24137607-02.analog-stereo"
 FOOTAGE_DIR = "/home/dash/dashcam-footage"
 SEGMENT_SECONDS = 300
 MAX_TOTAL_BYTES = 20 * 1024 * 1024 * 1024
@@ -43,6 +49,7 @@ def record_forever():
             "-f", "v4l2", "-input_format", "mjpeg",
             "-video_size", "1280x720", "-framerate", "30",
             "-i", DEVICE,
+            "-f", "pulse", "-i", AUDIO_SOURCE,
             # Camera is mounted upside down - hflip+vflip is a pure pixel
             # reorder equivalent to a 180 rotation, cheaper than a generic
             # rotate filter. Output framerate dropped to 15fps: at
@@ -50,9 +57,11 @@ def record_forever():
             # available on this system) cost ~275% CPU running forever in
             # the background, which is too much for an always-on service;
             # 720p15 costs ~100% (one core), a dashcam doesn't need more.
+            "-map", "0:v", "-map", "1:a",
             "-vf", "hflip,vflip",
             "-r", "15",
             "-c:v", "libx264", "-preset", "veryfast", "-b:v", "1.5M",
+            "-c:a", "aac", "-b:a", "96k",
             "-f", "segment", "-segment_time", str(SEGMENT_SECONDS),
             "-reset_timestamps", "1", "-strftime", "1",
             os.path.join(FOOTAGE_DIR, "dashcam_%Y%m%d_%H%M%S.mp4"),
