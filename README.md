@@ -8,6 +8,15 @@ relays, sensors, and dash itself as slave devices.
 
 - `dash-gui/` - the PyQt5 application that runs on dash.
 - `esp-config/` - the ESPHome YAML for the vehicle's ESP32-S3 controller.
+- `volume-control/` - rotary encoder volume control, autostarts with the
+  desktop session.
+- `dashcam/` - continuous loop-recording dashcam using the Anker webcam,
+  runs as a systemd service from boot.
+- `gpio-buttons/` - reads the physical GPIO push buttons and emulates the
+  corresponding keyboard keypresses that the dash app listens for. Not
+  currently autostarted - was archived in favour of a device-tree
+  `gpio-keys` overlay (`rock5bextras/gpiokeys.dts`) doing the same job at
+  the kernel level, kept here for reference/fallback.
 - `scripts/` - one-off setup scripts for dash itself.
 
 ## Setup
@@ -24,9 +33,40 @@ and left untracked (see `.gitignore`):
 Run the GUI with `./run.sh` (regenerates `gui.py` from `gui.ui` via
 `convert_gui.sh`, then launches `dash_app.py`).
 
-On dash itself, also run `sudo scripts/install-ftdi-latency-rule.sh` once.
-It installs a udev rule setting the FTDI USB-serial adapter's
-`latency_timer` to 1ms instead of the 16ms Linux default - Modbus RTU
-needs a few milliseconds of bus silence to detect frame boundaries, so the
-default latency is enough to corrupt framing on a busy RS485 bus. Without
-this rule you'd need to re-apply it by hand after every reboot.
+On dash itself, also run these once (each is idempotent, safe to re-run):
+
+- `sudo scripts/install-ftdi-latency-rule.sh` - sets the FTDI USB-serial
+  adapter's `latency_timer` to 1ms instead of the 16ms Linux default.
+  Modbus RTU needs a few milliseconds of bus silence to detect frame
+  boundaries, so the default latency is enough to corrupt framing on a
+  busy RS485 bus. Without this you'd need to re-apply it by hand after
+  every reboot (`echo 1 | sudo tee /sys/bus/usb-serial/devices/ttyUSB0/latency_timer`).
+- `sudo volume-control/install.sh` - autostarts the rotary encoder volume
+  control with the desktop session.
+- `sudo dashcam/install.sh` - installs and starts the dashcam systemd
+  service so it records from boot.
+
+### Dashcam
+
+Loop-records from the Anker webcam (`dashcam/dashcam.py`) into
+`~/dashcam-footage/`, deleting the oldest segment once total footage
+exceeds 20GB (`MAX_TOTAL_BYTES` in the script) - a fixed disk budget
+rather than a fixed segment count, so it adapts to whatever's actually in
+the files. Records at 720p/15fps rather than the camera's native
+1080p/30fps: this system's ffmpeg has no hardware encoder available (the
+Rockchip MPP library is installed, but the stock Debian ffmpeg build
+isn't compiled with `--enable-rkmpp`, and getting that needs a custom
+ffmpeg build like the community `ffmpeg-rockchip` fork), and 1080p30
+software libx264 encoding costs ~275% CPU running forever in the
+background - too much for an always-on service. 720p15 costs ~100% (one
+core), which a dashcam doesn't need to beat.
+
+The camera is referenced by its stable `/dev/v4l/by-id/...` udev path
+rather than `/dev/videoN`, since device numbers reshuffle across reboots
+depending on USB enumeration order. If the camera is ever replaced, find
+the new path with `ls /dev/v4l/by-id/` and update `DEVICE` in
+`dashcam.py`.
+
+Note: the Anker webcam can only be used by one consumer at a time. Don't
+point the dash app's own Camera page at it while the dashcam service is
+running (or vice versa) - they'll fight over the device.

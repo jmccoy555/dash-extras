@@ -1,0 +1,13 @@
+[Unit]
+Description=Dashcam continuous recorder
+After=multi-user.target
+
+[Service]
+Type=simple
+User=dash
+ExecStart=/usr/bin/python3 /home/dash/dash-extras/dashcam/dashcam.py
+Restart=on-failure
+RestartSec=5s
+
+[Install]
+WantedBy=multi-user.target
