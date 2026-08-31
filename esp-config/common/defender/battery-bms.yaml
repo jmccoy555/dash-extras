@@ -24,13 +24,18 @@ ble_client:
   - mac_address: !secret bms_mac_address
     id: aux_battery_bms
 
-jbd_bms:
-  - ble_client_id: aux_battery_bms
+# The actual component is jbd_bms_ble (a separate component from plain
+# jbd_bms, which doesn't take a ble_client at all) - confirmed against the
+# real component source on the ESPHome host after an earlier pass guessed
+# this wrong ("ble_client_id is an invalid option for jbd_bms").
+jbd_bms_ble:
+  - id: aux_battery_jbd_ble
+    ble_client_id: aux_battery_bms
     update_interval: 30s
 
 sensor:
-  - platform: jbd_bms
-    jbd_bms_id: jbd_bms_0
+  - platform: jbd_bms_ble
+    jbd_bms_ble_id: aux_battery_jbd_ble
     total_voltage:
       id: bms_voltage
       internal: true
