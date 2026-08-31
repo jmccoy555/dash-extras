@@ -805,11 +805,15 @@ class MainWindow(QMainWindow):
         if relay_stale:
             self.ui.chargerState1.setText("State1: Error")
             self.ui.chargerState2.setText("State2: Error")
+            self.set_label_error(self.ui.chargerState1)
+            self.set_label_error(self.ui.chargerState2)
         else:
             charger1_on = self._read_coil(COIL_MAP["charger1Power"])
             charger2_on = self._read_coil(COIL_MAP["charger2Power"])
             self.ui.chargerState1.setText(f"State1: {'ON' if charger1_on else 'OFF'}")
             self.ui.chargerState2.setText(f"State2: {'ON' if charger2_on else 'OFF'}")
+            self.set_label_ok(self.ui.chargerState1)
+            self.set_label_ok(self.ui.chargerState2)
 
         sensor_stale = (now - self.holding_regs.last_write_time) > self.sensor_stale_after if self.holding_regs.last_write_time else True
         if sensor_stale:
@@ -841,8 +845,17 @@ class MainWindow(QMainWindow):
             full_ah = remaining_ah / (soc / 100.0) if soc > 0 else remaining_ah
             self.handle_jbd_battery_update(voltage, current, soc, remaining_ah, full_ah)
 
-        count = sum(1 for c in (COIL_JAMES_FOB, COIL_JAMES_PHONE, COIL_OLGA_FOB, COIL_OLGA_PHONE) if self._read_coil(c))
-        self.ui.bleCountLabel.setText(f"BLE: {count}")
+        # Coil-driven like everything above it, but was reading and
+        # displaying unconditionally regardless of relay_stale - showing a
+        # frozen last-known count with no error indication at all while the
+        # ESP was disconnected (see conversation).
+        if relay_stale:
+            self.ui.bleCountLabel.setText("BLE: Error")
+            self.set_label_error(self.ui.bleCountLabel)
+        else:
+            count = sum(1 for c in (COIL_JAMES_FOB, COIL_JAMES_PHONE, COIL_OLGA_FOB, COIL_OLGA_PHONE) if self._read_coil(c))
+            self.ui.bleCountLabel.setText(f"BLE: {count}")
+            self.set_label_ok(self.ui.bleCountLabel)
 
         if self._read_coil(COIL_SHUTDOWN_REQUEST):
             print("[shutdown] ESP requested a clean shutdown - shutting down now", flush=True)
@@ -851,19 +864,30 @@ class MainWindow(QMainWindow):
             subprocess.run(["sudo", "/sbin/shutdown", "-h", "now"])
 
     def _check_ble_staleness(self):
+        # Was only ever changing text here, never styling - the coil and
+        # holding-register panels both go red via set_label_error() when
+        # stale, but these BLE-fed ones stayed permanently on whatever
+        # set_label_ok() left them at during __init__ and never went red at
+        # all. That's the "some boxes go red, some don't" inconsistency
+        # (see conversation) - matching the same set_label_error()/
+        # set_label_ok() pattern here now.
         now = time.monotonic()
         if now - self._last_battery_update > self.ble_stale_threshold:
             for label in self.battery_labels:
                 label.setText(self.victron_stale_text[label])
+                self.set_label_error(label)
         if now - self._last_solar_update > self.ble_stale_threshold:
             for label in self.solar_labels:
                 label.setText(self.victron_stale_text[label])
+                self.set_label_error(label)
         if now - self._last_inverter_update > self.ble_stale_threshold:
             for label in self.inverter_labels:
                 label.setText(self.victron_stale_text[label])
+                self.set_label_error(label)
         if now - self._last_charger_aux_update > self.ble_stale_threshold:
             for label in self.charger_aux_labels:
                 label.setText(self.victron_stale_text[label])
+                self.set_label_error(label)
 
     def handle_battery_update(self, voltage, current, soc, consumed_ah, remaining_mins, main_battery_voltage):
         # Victron's shunt still owns the starter/main battery reading (it's
@@ -875,6 +899,7 @@ class MainWindow(QMainWindow):
             self.ui.mainBatteryVoltage.setText("Voltage: N/A")
         else:
             self.ui.mainBatteryVoltage.setText(f"Voltage: {main_battery_voltage:.2f} V")
+        self.set_label_ok(self.ui.mainBatteryVoltage)
 
     def handle_jbd_battery_update(self, voltage, current, soc, remaining_ah, full_ah):
         self._last_battery_update = time.monotonic()
@@ -888,6 +913,9 @@ class MainWindow(QMainWindow):
             self.ui.batteryTTG.setText(f"TTG: {hours}h {mins}m")
         else:
             self.ui.batteryTTG.setText("TTG: N/A")
+        for label in (self.ui.batteryVoltage, self.ui.batterySOC, self.ui.batteryConsumed,
+                      self.ui.batteryCurrent, self.ui.batteryPower, self.ui.batteryTTG):
+            self.set_label_ok(label)
 
     def handle_charger_aux_update(self, voltage, current):
         self._last_charger_aux_update = time.monotonic()
@@ -898,6 +926,8 @@ class MainWindow(QMainWindow):
         # read positive here (see conversation).
         self.ui.chargerCurrent.setText(f"Current: {-current:.2f} A")
         self.ui.chargerPower.setText(f"Power: {-voltage * current:.0f} W")
+        for label in self.charger_aux_labels:
+            self.set_label_ok(label)
 
     def handle_solar_update(self, state_text, voltage, current, power, yield_today):
         self._last_solar_update = time.monotonic()
@@ -905,6 +935,8 @@ class MainWindow(QMainWindow):
         self.ui.solarCurrent.setText(f"Current: {current:.2f} A")
         self.ui.solarPower.setText(f"Power: {power:.0f} W")
         self.ui.solarYield.setText(f"Yield: {yield_today:.0f} Wh")
+        for label in self.solar_labels:
+            self.set_label_ok(label)
 
     def handle_inverter_update(self, state_text, voltage, current, power):
         self._last_inverter_update = time.monotonic()
@@ -912,6 +944,8 @@ class MainWindow(QMainWindow):
         self.ui.inverterVoltage.setText(f"Voltage: {voltage:.2f} V")
         self.ui.inverterCurrent.setText(f"Current: {current:.2f} A")
         self.ui.inverterPowerOut.setText(f"Power: {power:.0f} VA")
+        for label in self.inverter_labels:
+            self.set_label_ok(label)
 
     def update_button_style(self, button, state):
         if state:
