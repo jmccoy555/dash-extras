@@ -191,6 +191,12 @@ binary_sensor:
     internal: true
     register_type: coil
     address: 114
+    # See req_service_mode's comment further down - same single-poll-glitch
+    # guard, since this is also one of the five switches Service Mode's
+    # save/off/restore cascade touches.
+    filters:
+      - delayed_on: 400ms
+      - delayed_off: 400ms
     on_state:
       - lambda: |-
           if (x) id(headlights_auto).turn_on();
@@ -201,6 +207,13 @@ binary_sensor:
     internal: true
     register_type: coil
     address: 115
+    # Same single-corrupted-poll-cycle protection as req_service_mode above
+    # (see the comment there) - the automode coils are the ones directly
+    # reported as flapping, so worth guarding whether the corruption lands
+    # on their own bit or on service_mode's (which cascades into these too).
+    filters:
+      - delayed_on: 400ms
+      - delayed_off: 400ms
     on_state:
       - lambda: |-
           if (x) id(sidelights_auto).turn_on();
@@ -211,6 +224,18 @@ binary_sensor:
     internal: true
     register_type: coil
     address: 116
+    # Service Mode's turn_on/off actions save and cascade-restore five other
+    # switches (see output.yaml) - by far the largest blast radius of any
+    # coil in this range. A single corrupted-but-CRC-passing byte on the
+    # shared bus flipping just this one bit for one 300ms poll cycle would
+    # fire that whole save/off/restore sequence and self-correct on the next
+    # good poll - looking exactly like "the automodes clear themselves, then
+    # come back" from the outside. Requiring the change to hold for two poll
+    # cycles filters out exactly that single-frame glitch without adding
+    # any real delay to a genuine button press.
+    filters:
+      - delayed_on: 400ms
+      - delayed_off: 400ms
     on_state:
       - lambda: |-
           if (x) id(service_mode).turn_on();
@@ -271,6 +296,10 @@ binary_sensor:
     internal: true
     register_type: coil
     address: 125
+    # See req_service_mode's comment above - same single-poll-glitch guard.
+    filters:
+      - delayed_on: 400ms
+      - delayed_off: 400ms
     on_state:
       - lambda: |-
           if (x) id(lightbar_auto_main).turn_on();
@@ -281,6 +310,9 @@ binary_sensor:
     internal: true
     register_type: coil
     address: 126
+    filters:
+      - delayed_on: 400ms
+      - delayed_off: 400ms
     on_state:
       - lambda: |-
           if (x) id(lightbar_auto_amber).turn_on();
@@ -291,6 +323,9 @@ binary_sensor:
     internal: true
     register_type: coil
     address: 127
+    filters:
+      - delayed_on: 400ms
+      - delayed_off: 400ms
     on_state:
       - lambda: |-
           if (x) id(lightbar_auto_white).turn_on();

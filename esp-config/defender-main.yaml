@@ -12,6 +12,21 @@ substitutions:
   device_name: defender-main
 
 packages:
+  # wifi: !include common/wifi-wpa.yaml
+  # ethernet: !include common/eth-w5500.yaml
+  # main: !include common/defender/main.yaml
+  # ble-tracker: !include common/ble-tracker-wifi.yaml
+  # Re-enabling this caused severe, sustained Modbus RTU frame corruption
+  # (constant "Clearing buffer... parse failed", garbled repeating frames)
+  # within seconds of boot - almost certainly the per-packet AES decryption
+  # of Victron's encrypted BLE advertisements stealing enough CPU time to
+  # starve the UART's timing-critical RX handling, unlike the much
+  # lighter-weight presence/RSSI BLE tracking that's always running.
+  # Confirmed live; do not re-enable without addressing that contention
+  # (e.g. a lower-priority BLE task, or moving Victron reporting to dash's
+  # own BLE poller instead of the ESP's).
+  # victron: !include common/defender/victron.yaml
+
   gpio-input: !include common/defender/input.yaml
   gpio-output: !include common/defender/output.yaml
   onewire: !include common/defender/one-wire.yaml
@@ -52,7 +67,7 @@ wifi:
     # ssid: ${device_name}
     password: !secret hotspot_password
   domain: .mcy.lan
-  ssid: MCY_IoT
+  ssid: !secret wifi_ssid
   password: !secret wifi_password
   fast_connect: on
   # fallback mechanism: If ESP can't connect to Wi-Fi, switch to AP mode
@@ -62,8 +77,14 @@ wifi:
   on_connect:
     - esp32_ble_tracker.start_scan:
         continuous: true
-  on_disconnect:
-    - esp32_ble_tracker.stop_scan:
+  # Used to stop_scan here on WiFi disconnect - but WiFi range and driving
+  # range aren't the same thing, and losing WiFi (driving away from home)
+  # was exactly when fob presence detection matters most. That stop left
+  # scanning off until WiFi came back, so the fob's ble_presence sensor
+  # (60s timeout) always dropped to OFF once out of range and never
+  # recovered until getting back in WiFi range. Scanning now just keeps
+  # running once started at the first WiFi connect, regardless of WiFi
+  # state after.
 
 #captive_portal:
 
@@ -115,7 +136,7 @@ interval:
 
 binary_sensor:
   - platform: ble_presence
-    ibeacon_uuid: "XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX"
+    ibeacon_uuid: !secret james_phone_uuid
     #     mac_address: XX:XX:XX:XX:XX:XX
     name: "James Phone Presence"
     id: james_phone
@@ -123,7 +144,7 @@ binary_sensor:
     web_server:
       sorting_group_id: sorting_group_bluetooth
   # - platform: ble_presence
-  #   ibeacon_uuid: "XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX"
+  #   ibeacon_uuid: !secret olga_phone_uuid
   #   #     mac_address: XX:XX:XX:XX:XX:XX
   #   name: "Olga Phone Presence"
   #   id: olga_phone
@@ -131,14 +152,14 @@ binary_sensor:
   #   web_server:
   #     sorting_group_id: sorting_group_bluetooth
   - platform: ble_presence
-    mac_address: XX:XX:XX:XX:XX:XX
+    mac_address: !secret james_fob_mac
     name: "James Fob Presence"
     id: james_fob
     timeout: 60s    
     web_server:
       sorting_group_id: sorting_group_bluetooth
   # - platform: ble_presence
-  #   mac_address: XX:XX:XX:XX:XX:XX
+  #   mac_address: !secret olga_fob_mac
   #   name: "Olga Fob Presence"
   #   id: olga_fob
   #   timeout: 30s
@@ -168,28 +189,28 @@ sensor:
     web_server:
       sorting_group_id: sorting_group_system
   - platform: ble_rssi
-    ibeacon_uuid: "XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX"
+    ibeacon_uuid: !secret james_phone_uuid
     name: "James Phone Signal"
     filters:
     - heartbeat: 15s    
     web_server:
       sorting_group_id: sorting_group_bluetooth
   # - platform: ble_rssi
-  #   ibeacon_uuid: "XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX"
+  #   ibeacon_uuid: !secret olga_phone_uuid
   #   name: "Olga Phone Signal"
   #   filters:
   #   - heartbeat: 15s    
   #   web_server:
   #     sorting_group_id: sorting_group_bluetooth
   - platform: ble_rssi
-    mac_address: XX:XX:XX:XX:XX:XX
+    mac_address: !secret james_fob_mac
     name: "James Fob Signal"
     filters:
     - heartbeat: 15s    
     web_server:
       sorting_group_id: sorting_group_bluetooth
   # - platform: ble_rssi
-  #   mac_address: XX:XX:XX:XX:XX:XX
+  #   mac_address: !secret olga_fob_mac
   #   name: "Olga Fob Signal"
   #   filters:
   #   - heartbeat: 15s    
