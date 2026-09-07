@@ -188,6 +188,24 @@ COIL_OLGA_PHONE = 49        # ESP-write-only
 # range; only toggle_button() touches the request range.
 REQUEST_COIL_OFFSET = 100
 
+# A brand new coils table (every dash_app.py process restart, e.g. when
+# dash.service restarts and KillMode=control-group takes this process down
+# with it) starts every coil at False, including e.g. suspensionPower's and
+# charger1Power/charger2Power's request coils - even though the relays were
+# actually on. The ESP polls the request range every 300ms and applies most
+# of those coils' values directly to real relays, so a poll landing before
+# refresh_from_datastore() has re-learned and re-asserted the true state
+# (which it can't do until the ESP's own next status push arrives, up to
+# ~4s later - see output.yaml) reads that False as a genuine "turn it off"
+# request. This coil is a request-range address the ESP already polls as
+# part of its merged 110-161 read (previously an unused filler slot, see
+# modbus-dash.yaml) but ignores every other coil's on_state until this one
+# reads True - so it must go a full restart-and-reseed cycle stale-then-
+# fresh before the ESP will act on anything again. Requires the matching
+# ESP-side gate in modbus-dash.yaml to actually stop anything; on its own
+# this dash-side half only makes the reseed happen, it doesn't gate reads.
+COIL_GUI_READY = 149
+
 COIL_NAMES = {addr: name for name, addr in COIL_MAP.items()}
 AUTOMODE_COILS = {
     COIL_MAP["sidelightsAuto"], COIL_MAP["lightbarAutoMain"],
@@ -670,6 +688,9 @@ class MainWindow(QMainWindow):
         # which is visibly slower than the 200ms UI refresh, see conversation).
         self.button_pending_until = {}
         self.button_pending_grace = 6.0
+        # Set once, the first time refresh_from_datastore() gets a
+        # non-stale read after this process starts - see COIL_GUI_READY.
+        self._gui_ready_sent = False
         for button, _ in self.relay_buttons:
             self.set_error_style(button)
 
@@ -757,18 +778,14 @@ class MainWindow(QMainWindow):
                 if pending:
                     self.button_pending_until.pop(button, None)
                 # button_states has no entry for this button yet on the very
-                # first non-stale observation after startup - that's not a
-                # "the ESP changed something behind our back" event, it's
-                # just dash finding out what the ESP's state already is. The
-                # echo-write below must not fire for it: on restart, every
-                # currently-active coil (worklights left on, auto-modes
-                # enabled, etc.) would otherwise get a request-coil write it
-                # never asked for, and any ESP-side entity that isn't a pure
-                # level switch (a toggle/automation-triggering one, as the
-                # automode coils apparently are - see conversation, "auto
-                # modes being cleared" on every dash restart) applies that as
-                # a real command instead of the no-op it's meant to be.
-                first_observation = button not in self.button_states
+                # first non-stale observation after startup - that's just
+                # dash finding out what the ESP's state already is, not "the
+                # ESP changed something behind our back". The echo-write
+                # below deliberately fires for this case anyway now (see its
+                # own comment) to re-seed the request range after a restart;
+                # AUTOMODE_COILS are still excluded outright below regardless
+                # of first/non-first observation - see that exclusion's own
+                # comment for why.
                 if getattr(button, "_prev_error", None) is not False or self.button_states.get(button) != state:
                     self.update_button_style(button, state)
                     button._prev_error = False
@@ -783,9 +800,8 @@ class MainWindow(QMainWindow):
                     # conversation - "press amber again and it fails").
                     # Re-sync it to match the real state we just observed so
                     # the next click is a genuine transition again.
-                    # Automode coils are excluded outright, not just guarded
-                    # by first_observation - logging (above) caught this
-                    # echo-write actually firing mid-flap during a live
+                    # Automode coils are excluded outright - logging (above)
+                    # caught this echo-write actually firing mid-flap during a live
                     # automode-clearing episode, with the real ESP-pushed
                     # status for these bouncing True/False within
                     # milliseconds at the source (see conversation - ruled
@@ -794,9 +810,27 @@ class MainWindow(QMainWindow):
                     # the source value, dash re-writing into it on every
                     # observed flip is at best pointless and at worst adds
                     # fuel - safest to never touch these four at all here.
-                    if coil not in MOMENTARY_COILS and not first_observation and coil not in AUTOMODE_COILS:
+                    # first_observation is included here on purpose (unlike
+                    # it used to be): this whole branch only runs once
+                    # relay_stale is False, i.e. the ESP has already sent a
+                    # real status push this process's lifetime, so `state`
+                    # is genuine ESP-reported truth even on the very first
+                    # tick after a restart - not the coils table's
+                    # post-restart False default. This is what re-seeds the
+                    # request range (wiped to False by the restart) back to
+                    # reality before the ESP acts on it - see COIL_GUI_READY.
+                    if coil not in MOMENTARY_COILS and coil not in AUTOMODE_COILS:
                         self._write_coil(coil + REQUEST_COIL_OFFSET, state)
                 self.button_states[button] = state
+
+        # First non-stale pass since this process started: every real
+        # toggle coil above has now been re-seeded into the request range
+        # from the ESP's own reported truth, so it's finally safe to tell
+        # the ESP (via COIL_GUI_READY, see its comment) to trust the
+        # request range again - see modbus-dash.yaml for the matching gate.
+        if not relay_stale and not self._gui_ready_sent:
+            self._write_coil(COIL_GUI_READY, True)
+            self._gui_ready_sent = True
 
         # DC Charger / Aux widget's two state labels - separate plain-text
         # labels from the charger1Power/charger2Power buttons above, but

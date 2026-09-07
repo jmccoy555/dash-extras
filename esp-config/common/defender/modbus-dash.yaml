@@ -153,6 +153,7 @@ binary_sensor:
     address: 110
     on_state:
       - lambda: |-
+          if (!id(req_gui_ready).state) return;
           if (x) id(worklight_passanger_side).turn_on();
           else id(worklight_passanger_side).turn_off();
   - platform: modbus_controller
@@ -163,6 +164,7 @@ binary_sensor:
     address: 111
     on_state:
       - lambda: |-
+          if (!id(req_gui_ready).state) return;
           if (x) id(worklight_drivers_side).turn_on();
           else id(worklight_drivers_side).turn_off();
   - platform: modbus_controller
@@ -173,6 +175,7 @@ binary_sensor:
     address: 112
     on_state:
       - lambda: |-
+          if (!id(req_gui_ready).state) return;
           if (x) id(worklight_rear).turn_on();
           else id(worklight_rear).turn_off();
   - platform: modbus_controller
@@ -183,6 +186,7 @@ binary_sensor:
     address: 113
     on_state:
       - lambda: |-
+          if (!id(req_gui_ready).state) return;
           if (x) id(worklight_bonnet).turn_on();
           else id(worklight_bonnet).turn_off();
   - platform: modbus_controller
@@ -199,6 +203,7 @@ binary_sensor:
       - delayed_off: 400ms
     on_state:
       - lambda: |-
+          if (!id(req_gui_ready).state) return;
           if (x) id(headlights_auto).turn_on();
           else id(headlights_auto).turn_off();
   - platform: modbus_controller
@@ -216,6 +221,7 @@ binary_sensor:
       - delayed_off: 400ms
     on_state:
       - lambda: |-
+          if (!id(req_gui_ready).state) return;
           if (x) id(sidelights_auto).turn_on();
           else id(sidelights_auto).turn_off();
   - platform: modbus_controller
@@ -238,6 +244,7 @@ binary_sensor:
       - delayed_off: 400ms
     on_state:
       - lambda: |-
+          if (!id(req_gui_ready).state) return;
           if (x) id(service_mode).turn_on();
           else id(service_mode).turn_off();
   - platform: modbus_controller
@@ -248,6 +255,7 @@ binary_sensor:
     address: 120
     on_state:
       - lambda: |-
+          if (!id(req_gui_ready).state) return;
           if (x) id(lightbar_main).turn_on();
           else id(lightbar_main).turn_off();
   - platform: modbus_controller
@@ -258,6 +266,7 @@ binary_sensor:
     address: 121
     on_state:
       - lambda: |-
+          if (!id(req_gui_ready).state) return;
           if (x) id(lightbar_inner).turn_on();
           else id(lightbar_inner).turn_off();
   - platform: modbus_controller
@@ -268,6 +277,7 @@ binary_sensor:
     address: 122
     on_state:
       - lambda: |-
+          if (!id(req_gui_ready).state) return;
           if (x) id(lightbar_outer).turn_on();
           else id(lightbar_outer).turn_off();
   - platform: modbus_controller
@@ -278,6 +288,7 @@ binary_sensor:
     address: 123
     on_state:
       - lambda: |-
+          if (!id(req_gui_ready).state) return;
           if (x) id(lightbar_white).turn_on();
           else id(lightbar_white).turn_off();
   - platform: modbus_controller
@@ -288,6 +299,7 @@ binary_sensor:
     address: 124
     on_state:
       - lambda: |-
+          if (!id(req_gui_ready).state) return;
           if (x) id(lightbar_amber).turn_on();
           else id(lightbar_amber).turn_off();
   - platform: modbus_controller
@@ -302,6 +314,7 @@ binary_sensor:
       - delayed_off: 400ms
     on_state:
       - lambda: |-
+          if (!id(req_gui_ready).state) return;
           if (x) id(lightbar_auto_main).turn_on();
           else id(lightbar_auto_main).turn_off();
   - platform: modbus_controller
@@ -315,6 +328,7 @@ binary_sensor:
       - delayed_off: 400ms
     on_state:
       - lambda: |-
+          if (!id(req_gui_ready).state) return;
           if (x) id(lightbar_auto_amber).turn_on();
           else id(lightbar_auto_amber).turn_off();
   - platform: modbus_controller
@@ -328,6 +342,7 @@ binary_sensor:
       - delayed_off: 400ms
     on_state:
       - lambda: |-
+          if (!id(req_gui_ready).state) return;
           if (x) id(lightbar_auto_white).turn_on();
           else id(lightbar_auto_white).turn_off();
   - platform: modbus_controller
@@ -338,6 +353,7 @@ binary_sensor:
     address: 130
     on_state:
       - lambda: |-
+          if (!id(req_gui_ready).state) return;
           if (x) id(window_front_power).turn_on();
           else id(window_front_power).turn_off();
   - platform: modbus_controller
@@ -397,6 +413,7 @@ binary_sensor:
     on_state:
       - lambda: |-
           if (id(dash_boot_guard_inverter)) return;
+          if (!id(req_gui_ready).state) return;
           if (x) id(inverter_power).turn_on();
           else id(inverter_power).turn_off();
   - platform: modbus_controller
@@ -407,6 +424,7 @@ binary_sensor:
     address: 141
     on_state:
       - lambda: |-
+          if (!id(req_gui_ready).state) return;
           if (x) id(charger_1).turn_on();
           else id(charger_1).turn_off();
   - platform: modbus_controller
@@ -417,6 +435,7 @@ binary_sensor:
     address: 142
     on_state:
       - lambda: |-
+          if (!id(req_gui_ready).state) return;
           if (x) id(charger_2).turn_on();
           else id(charger_2).turn_off();
   - platform: modbus_controller
@@ -427,6 +446,7 @@ binary_sensor:
     address: 143
     on_state:
       - lambda: |-
+          if (!id(req_gui_ready).state) return;
           if (x) id(suspension_handbrake).turn_on();
           else id(suspension_handbrake).turn_off();
   - platform: modbus_controller
@@ -437,6 +457,7 @@ binary_sensor:
     address: 144
     on_state:
       - lambda: |-
+          if (!id(req_gui_ready).state) return;
           if (x) id(suspension_power).turn_on();
           else id(suspension_power).turn_off();
   - platform: modbus_controller
@@ -447,6 +468,7 @@ binary_sensor:
     address: 145
     on_state:
       - lambda: |-
+          if (!id(req_gui_ready).state) return;
           if (x) id(dash_shutdown_request).turn_on();
           else id(dash_shutdown_request).turn_off();
   - platform: modbus_controller
@@ -457,6 +479,7 @@ binary_sensor:
     address: 150
     on_state:
       - lambda: |-
+          if (!id(req_gui_ready).state) return;
           if (x) id(suspension_service).turn_on();
           else id(suspension_service).turn_off();
   - platform: modbus_controller
@@ -467,6 +490,7 @@ binary_sensor:
     address: 151
     on_state:
       - lambda: |-
+          if (!id(req_gui_ready).state) return;
           if (x) id(low_box).turn_on();
           else id(low_box).turn_off();
   - platform: modbus_controller
@@ -477,6 +501,7 @@ binary_sensor:
     address: 152
     on_state:
       - lambda: |-
+          if (!id(req_gui_ready).state) return;
           if (x) id(diff_lock).turn_on();
           else id(diff_lock).turn_off();
 
@@ -554,12 +579,60 @@ binary_sensor:
     internal: true
     register_type: coil
     address: 148
+  # Gates every real on/off request coil below against dash_app.py's own
+  # restart race: a fresh dash_app.py process starts its whole coil table
+  # (both status and request ranges) at False, including e.g. suspension_
+  # power's/charger_1's/charger_2's request coils, even when the relays were
+  # actually on. This poll (already merged into the same 110-161 read as
+  # everything else, so no extra bus cost - this used to be an unused
+  # filler slot) reads False on every fresh restart until dash_app.py has
+  # re-learned the real state from our own next status push and written it
+  # back in, then sets this True (see dash-gui's COIL_GUI_READY). Every
+  # non-momentary coil below checks this before acting, so it ignores the
+  # request range entirely during that window instead of treating a reset-
+  # to-False as a genuine "turn it off". on_state below re-applies each
+  # gated coil's already-polled current value once we flip back to ready,
+  # in case a real change landed while gated and got ignored.
   - platform: modbus_controller
     modbus_controller_id: client_dash_requests
-    id: req_filler_149
+    id: req_gui_ready
     internal: true
     register_type: coil
     address: 149
+    on_state:
+      - if:
+          condition:
+            lambda: 'return x;'
+          then:
+            - lambda: |-
+                if (id(req_worklight_passanger_side).state) id(worklight_passanger_side).turn_on(); else id(worklight_passanger_side).turn_off();
+                if (id(req_worklight_drivers_side).state) id(worklight_drivers_side).turn_on(); else id(worklight_drivers_side).turn_off();
+                if (id(req_worklight_rear).state) id(worklight_rear).turn_on(); else id(worklight_rear).turn_off();
+                if (id(req_worklight_bonnet).state) id(worklight_bonnet).turn_on(); else id(worklight_bonnet).turn_off();
+                if (id(req_headlights_auto).state) id(headlights_auto).turn_on(); else id(headlights_auto).turn_off();
+                if (id(req_sidelights_auto).state) id(sidelights_auto).turn_on(); else id(sidelights_auto).turn_off();
+                if (id(req_service_mode).state) id(service_mode).turn_on(); else id(service_mode).turn_off();
+                if (id(req_lightbar_main).state) id(lightbar_main).turn_on(); else id(lightbar_main).turn_off();
+                if (id(req_lightbar_inner).state) id(lightbar_inner).turn_on(); else id(lightbar_inner).turn_off();
+                if (id(req_lightbar_outer).state) id(lightbar_outer).turn_on(); else id(lightbar_outer).turn_off();
+                if (id(req_lightbar_white).state) id(lightbar_white).turn_on(); else id(lightbar_white).turn_off();
+                if (id(req_lightbar_amber).state) id(lightbar_amber).turn_on(); else id(lightbar_amber).turn_off();
+                if (id(req_lightbar_auto_main).state) id(lightbar_auto_main).turn_on(); else id(lightbar_auto_main).turn_off();
+                if (id(req_lightbar_auto_amber).state) id(lightbar_auto_amber).turn_on(); else id(lightbar_auto_amber).turn_off();
+                if (id(req_lightbar_auto_white).state) id(lightbar_auto_white).turn_on(); else id(lightbar_auto_white).turn_off();
+                if (id(req_window_front_power).state) id(window_front_power).turn_on(); else id(window_front_power).turn_off();
+                if (!id(dash_boot_guard_inverter)) { if (id(req_inverter_power).state) id(inverter_power).turn_on(); else id(inverter_power).turn_off(); }
+                if (id(req_charger_1).state) id(charger_1).turn_on(); else id(charger_1).turn_off();
+                if (id(req_charger_2).state) id(charger_2).turn_on(); else id(charger_2).turn_off();
+                if (id(req_suspension_handbrake).state) id(suspension_handbrake).turn_on(); else id(suspension_handbrake).turn_off();
+                if (id(req_suspension_power).state) id(suspension_power).turn_on(); else id(suspension_power).turn_off();
+                if (id(req_dash_shutdown_request).state) id(dash_shutdown_request).turn_on(); else id(dash_shutdown_request).turn_off();
+                if (id(req_suspension_service).state) id(suspension_service).turn_on(); else id(suspension_service).turn_off();
+                if (id(req_low_box).state) id(low_box).turn_on(); else id(low_box).turn_off();
+                if (id(req_diff_lock).state) id(diff_lock).turn_on(); else id(diff_lock).turn_off();
+                if (id(req_rear_power).state) id(rear_power).turn_on(); else id(rear_power).turn_off();
+                if (id(req_side_lights).state) id(side_lights).turn_on(); else id(side_lights).turn_off();
+                if (id(req_headlights).state) id(low_beam).turn_on(); else id(low_beam).turn_off();
 
   # Rear window requests (153-156) - contiguous right after 152
   # (diff_lock), so these extend the existing merged read automatically,
@@ -609,6 +682,7 @@ binary_sensor:
     address: 157
     on_state:
       - lambda: |-
+          if (!id(req_gui_ready).state) return;
           if (x) id(rear_power).turn_on();
           else id(rear_power).turn_off();
   - platform: modbus_controller
@@ -637,6 +711,7 @@ binary_sensor:
     address: 160
     on_state:
       - lambda: |-
+          if (!id(req_gui_ready).state) return;
           if (x) id(side_lights).turn_on();
           else id(side_lights).turn_off();
   - platform: modbus_controller
@@ -647,5 +722,6 @@ binary_sensor:
     address: 161
     on_state:
       - lambda: |-
+          if (!id(req_gui_ready).state) return;
           if (x) id(low_beam).turn_on();
           else id(low_beam).turn_off();
