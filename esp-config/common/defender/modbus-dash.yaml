@@ -142,7 +142,16 @@ modbus_controller:
   - id: client_dash_requests
     address: 5
     modbus_id: bus_client
-    update_interval: 300ms
+    # Was 300ms - halved for snappier window/etc buttons (see conversation).
+    # Bus headroom: a 52-coil read+response here is roughly 20-30ms of
+    # actual airtime at 9600 baud, and it's no longer competing with the
+    # status/register pushes the way it used to (see their own comments
+    # above - those were slowed specifically to stop crowding this poll
+    # out, and are now on 4s/5s cycles of their own, rarely landing in the
+    # same window as this one). If buttons start missing presses again or
+    # "Frame already active" refusals show up in the log after flashing,
+    # that's the signal this went too far - back off toward 300ms.
+    update_interval: 150ms
 
 binary_sensor:
   - platform: modbus_controller
