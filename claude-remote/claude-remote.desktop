@@ -1,0 +1,9 @@
+[Desktop Entry]
+Encoding=UTF-8
+Version=1.0
+Type=Application
+Terminal=false
+Exec=/usr/bin/konsole --hide-menubar --nofork -e /home/dash/dash-extras/scripts/claude-remote-terminal.sh
+Name=Claude Remote Terminal
+Comment=Claude Code Remote Control session in a visible terminal window
+Icon=utilities-terminal

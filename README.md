@@ -10,6 +10,9 @@ relays, sensors, and dash itself as slave devices.
 - `esp-config/` - the ESPHome YAML for the vehicle's ESP32-S3 controller.
 - `volume-control/` - rotary encoder volume control, autostarts with the
   desktop session.
+- `claude-remote/` - Claude Code Remote Control session in a visible
+  Konsole window, autostarts with the desktop session and auto-resumes
+  across restarts.
 - `dashcam/` - continuous loop-recording dashcam using the Anker webcam,
   runs as a systemd service from boot.
 - `gpio-buttons/` - reads the physical GPIO push buttons and emulates the
@@ -41,10 +44,20 @@ On dash itself, also run these once (each is idempotent, safe to re-run):
   boundaries, so the default latency is enough to corrupt framing on a
   busy RS485 bus. Without this you'd need to re-apply it by hand after
   every reboot (`echo 1 | sudo tee /sys/bus/usb-serial/devices/ttyUSB0/latency_timer`).
+- `sudo scripts/install-wifi-regdomain-rule.sh` - sets the wifi
+  regulatory domain to GB via udev whenever the wifi phy appears.
+  Without a country code, the kernel's default world regdomain marks the
+  whole 5GHz band passive-only (no beaconing), which silently breaks the
+  `Dash` AP hotspot (5GHz channel 48). Without this you'd need to
+  re-apply it by hand after every reboot (`sudo iw reg set GB`).
 - `sudo volume-control/install.sh` - autostarts the rotary encoder volume
   control with the desktop session.
 - `sudo dashcam/install.sh` - installs and starts the dashcam systemd
   service so it records from boot.
+- `claude-remote/install.sh` - autostarts a visible Konsole running
+  `claude --continue --remote-control dash`, so this session comes back
+  automatically after a reboot or logout. No sudo needed (only writes to
+  `~/.config/autostart`).
 
 ### Dashcam
 
