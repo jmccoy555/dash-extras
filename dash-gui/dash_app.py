@@ -197,17 +197,19 @@ REQUEST_COIL_OFFSET = 100
 # refresh_from_datastore() has re-learned and re-asserted the true state
 # (which it can't do until the ESP's own next status push arrives, up to
 # ~4s later - see output.yaml) reads that False as a genuine "turn it off"
-# request. This coil is polled as part of the ESP's merged 110-161 read
+# request. This coil is polled as part of the ESP's merged 100-161 read
 # (see modbus-dash.yaml) but ignores every other coil's on_state until this
 # one reads True - so it must go a full restart-and-reseed cycle stale-then-
 # fresh before the ESP will act on anything again. Requires the matching
 # ESP-side gate in modbus-dash.yaml to actually stop anything; on its own
 # this dash-side half only makes the reseed happen, it doesn't gate reads.
 #
-# Address 149 (must match modbus-dash.yaml's req_gui_ready exactly - not
-# a free choice on this side). A 100-161 variant was tried and reverted:
-# see modbus-dash.yaml's comment on req_gui_ready for why.
-COIL_GUI_READY = 149
+# Address 100 (must match modbus-dash.yaml's req_gui_ready exactly - not
+# a free choice on this side) - re-confirmed via live wire evidence across
+# several restart cycles that 149 (inside the range it gates) lets
+# req_charger_1/req_suspension_power keep reading their stale pre-restart
+# value even after gui_ready flips true. See modbus-dash.yaml's comment.
+COIL_GUI_READY = 100
 
 COIL_NAMES = {addr: name for name, addr in COIL_MAP.items()}
 AUTOMODE_COILS = {

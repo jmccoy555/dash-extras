@@ -201,7 +201,7 @@ binary_sensor:
     id: req_gui_ready
     internal: true
     register_type: coil
-    address: 149
+    address: 100
     on_state:
       - if:
           condition:
@@ -236,6 +236,72 @@ binary_sensor:
                 if (id(req_rear_power).state) id(rear_power).turn_on(); else id(rear_power).turn_off();
                 if (id(req_side_lights).state) id(side_lights).turn_on(); else id(side_lights).turn_off();
                 if (id(req_headlights).state) id(low_beam).turn_on(); else id(low_beam).turn_off();
+  # Bridges req_gui_ready (100) into the same contiguous 100-161 read as
+  # everything below - required for the same reason as the other req_filler_*
+  # entries (a gap splits the poll into multiple transactions). Re-added
+  # after reverting to 149 turned out to reintroduce the actual ordering bug
+  # this was for in the first place: live evidence (raw wire decode across
+  # several restart cycles) showed req_charger_1/req_suspension_power still
+  # reading their stale pre-restart value even AFTER gui_ready had already
+  # flipped true, meaning declaring req_gui_ready first in this file was
+  # NOT what determines processing order within one poll response - the
+  # earlier "Frame already active" errors blamed on this address change
+  # turned out to be present in every capture regardless, address or not,
+  # so likely pre-existing bus noise, not something this caused.
+  - platform: modbus_controller
+    modbus_controller_id: client_dash_requests
+    id: req_filler_101
+    internal: true
+    register_type: coil
+    address: 101
+  - platform: modbus_controller
+    modbus_controller_id: client_dash_requests
+    id: req_filler_102
+    internal: true
+    register_type: coil
+    address: 102
+  - platform: modbus_controller
+    modbus_controller_id: client_dash_requests
+    id: req_filler_103
+    internal: true
+    register_type: coil
+    address: 103
+  - platform: modbus_controller
+    modbus_controller_id: client_dash_requests
+    id: req_filler_104
+    internal: true
+    register_type: coil
+    address: 104
+  - platform: modbus_controller
+    modbus_controller_id: client_dash_requests
+    id: req_filler_105
+    internal: true
+    register_type: coil
+    address: 105
+  - platform: modbus_controller
+    modbus_controller_id: client_dash_requests
+    id: req_filler_106
+    internal: true
+    register_type: coil
+    address: 106
+  - platform: modbus_controller
+    modbus_controller_id: client_dash_requests
+    id: req_filler_107
+    internal: true
+    register_type: coil
+    address: 107
+  - platform: modbus_controller
+    modbus_controller_id: client_dash_requests
+    id: req_filler_108
+    internal: true
+    register_type: coil
+    address: 108
+  - platform: modbus_controller
+    modbus_controller_id: client_dash_requests
+    id: req_filler_109
+    internal: true
+    register_type: coil
+    address: 109
   - platform: modbus_controller
     modbus_controller_id: client_dash_requests
     id: req_worklight_passanger_side
@@ -670,6 +736,12 @@ binary_sensor:
     internal: true
     register_type: coil
     address: 148
+  - platform: modbus_controller
+    modbus_controller_id: client_dash_requests
+    id: req_filler_149
+    internal: true
+    register_type: coil
+    address: 149
   # Rear window requests (153-156) - contiguous right after 152
   # (diff_lock), so these extend the existing merged read automatically,
   # no new bus transaction. Momentary presses, same pattern as the front
