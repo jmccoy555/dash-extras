@@ -165,24 +165,32 @@ binary_sensor:
   # request range entirely during that window instead of treating a reset-
   # to-False as a genuine "turn it off".
   #
-  # MUST stay declared first, at an address (100) lower than every coil it
-  # gates (110+): on the batch poll after a restart, when everything resets
-  # to False at once, modbus_controller fires each coil's on_state in
-  # address/declaration order. This coil originally sat at 149, i.e. AFTER
-  # most of what it gates (110-148) - those coils' on_state ran and read
-  # this gate's stale pre-restart value (true) before this coil's own
-  # on_state had run to bring it current, so the gate silently did nothing
-  # for anything below 149 (worklights, lightbar, windows, chargers,
-  # suspension - exactly the relays that kept dropping). Only 150+ (rear
-  # doors, diff lock) were ever actually protected. Confirmed via code
-  # reading, not live-tested yet - if relays still drop after this, that
-  # theory was wrong and needs revisiting.
+  # MUST stay declared FIRST in this file, before every coil it gates
+  # (110+): on the batch poll after a restart, when everything resets to
+  # False at once, modbus_controller fires each coil's on_state in
+  # declaration order (NOT address order - tried moving this coil's own
+  # address down to 100 to force it first that way, which broke the merged
+  # 110-161 bus read into multiple overlapping requests instead - "Frame
+  # already active for 5 with 2 requests pending, refused" on the ESP's own
+  # debug log, dash never responding to anything. Reverted the address back
+  # to 149, its original contiguous slot, and kept only the YAML declaration
+  # moved to the top - untested whether declaration order alone is actually
+  # what governs firing order, or whether this needs a different approach
+  # entirely if relays still drop after this).
+  #
+  # This coil originally sat declared where its address (149) put it in the
+  # file, i.e. AFTER most of what it gates (110-148) - those coils' on_state
+  # ran and read this gate's stale pre-restart value (true) before this
+  # coil's own on_state had run to bring it current, so the gate silently
+  # did nothing for anything below 149 (worklights, lightbar, windows,
+  # chargers, suspension - exactly the relays that kept dropping). Only
+  # 150+ (rear doors, diff lock) were ever actually protected.
   - platform: modbus_controller
     modbus_controller_id: client_dash_requests
     id: req_gui_ready
     internal: true
     register_type: coil
-    address: 100
+    address: 149
     on_state:
       - if:
           condition:
@@ -217,69 +225,6 @@ binary_sensor:
                 if (id(req_rear_power).state) id(rear_power).turn_on(); else id(rear_power).turn_off();
                 if (id(req_side_lights).state) id(side_lights).turn_on(); else id(side_lights).turn_off();
                 if (id(req_headlights).state) id(low_beam).turn_on(); else id(low_beam).turn_off();
-  # Bridges req_gui_ready (100) into the same contiguous read as everything
-  # below (110-161) - modbus_controller only merges a range into one bus
-  # transaction when every address in it is declared (see the other
-  # req_filler_* entries), so a bare gap here would split the poll into
-  # multiple overlapping requests to the same unit. Confirmed live: this is
-  # exactly what happened moving req_gui_ready to 100 without these -
-  # "Frame already active for 5 with 2 requests pending, refused" and
-  # "Probe refused by hub" on the ESP's own debug log, dash never
-  # responding to anything as a result.
-  - platform: modbus_controller
-    modbus_controller_id: client_dash_requests
-    id: req_filler_101
-    internal: true
-    register_type: coil
-    address: 101
-  - platform: modbus_controller
-    modbus_controller_id: client_dash_requests
-    id: req_filler_102
-    internal: true
-    register_type: coil
-    address: 102
-  - platform: modbus_controller
-    modbus_controller_id: client_dash_requests
-    id: req_filler_103
-    internal: true
-    register_type: coil
-    address: 103
-  - platform: modbus_controller
-    modbus_controller_id: client_dash_requests
-    id: req_filler_104
-    internal: true
-    register_type: coil
-    address: 104
-  - platform: modbus_controller
-    modbus_controller_id: client_dash_requests
-    id: req_filler_105
-    internal: true
-    register_type: coil
-    address: 105
-  - platform: modbus_controller
-    modbus_controller_id: client_dash_requests
-    id: req_filler_106
-    internal: true
-    register_type: coil
-    address: 106
-  - platform: modbus_controller
-    modbus_controller_id: client_dash_requests
-    id: req_filler_107
-    internal: true
-    register_type: coil
-    address: 107
-  - platform: modbus_controller
-    modbus_controller_id: client_dash_requests
-    id: req_filler_108
-    internal: true
-    register_type: coil
-    address: 108
-  - platform: modbus_controller
-    modbus_controller_id: client_dash_requests
-    id: req_filler_109
-    internal: true
-    register_type: coil
-    address: 109
   - platform: modbus_controller
     modbus_controller_id: client_dash_requests
     id: req_worklight_passanger_side
@@ -714,12 +659,6 @@ binary_sensor:
     internal: true
     register_type: coil
     address: 148
-  - platform: modbus_controller
-    modbus_controller_id: client_dash_requests
-    id: req_filler_149
-    internal: true
-    register_type: coil
-    address: 149
   # Rear window requests (153-156) - contiguous right after 152
   # (diff_lock), so these extend the existing merged read automatically,
   # no new bus transaction. Momentary presses, same pattern as the front
