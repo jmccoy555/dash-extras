@@ -91,10 +91,21 @@ interval:
               id(window_front_power).state,
               false, false, false, false, false, false, false, false, false,
               id(inverter_power).state,
-              id(charger_1).state,
-              id(charger_2).state,
-              id(suspension_handbrake).state,
-              id(suspension_power).state,
+              // charger_1/2 and suspension_handbrake/power read from their
+              // _state companion sensors (a separate, directly-polled
+              // read-back of the same coil on the remote relay board -
+              // client_20 in modbus-client.yaml), not the switch objects
+              // themselves. The switch's own .state only updates via that
+              // companion's on_press/on_release (edge-triggered), so a
+              // missed transition can leave it stale indefinitely; the
+              // companion's .state is refreshed on every poll regardless,
+              // so it can't go stale the same way. suspension_service has
+              // no such companion sensor, so it's left reading the switch
+              // directly, same as before.
+              id(charger_1_state).state,
+              id(charger_2_state).state,
+              id(suspension_handbrake_state).state,
+              id(suspension_power_state).state,
               id(dash_shutdown_request).state,
               id(james_fob).state,
               id(james_phone).state,
