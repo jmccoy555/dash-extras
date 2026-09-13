@@ -214,12 +214,11 @@ binary_sensor:
                 if (id(req_lightbar_auto_white).state) id(lightbar_auto_white).turn_on(); else id(lightbar_auto_white).turn_off();
                 if (id(req_window_front_power).state) id(window_front_power).turn_on(); else id(window_front_power).turn_off();
                 if (!id(dash_boot_guard_inverter)) { if (id(req_inverter_power).state) id(inverter_power).turn_on(); else id(inverter_power).turn_off(); }
-                if (id(req_charger_1).state) id(charger_1).turn_on(); else id(charger_1).turn_off();
-                if (id(req_charger_2).state) id(charger_2).turn_on(); else id(charger_2).turn_off();
-                if (id(req_suspension_handbrake).state) id(suspension_handbrake).turn_on(); else id(suspension_handbrake).turn_off();
-                if (id(req_suspension_power).state) id(suspension_power).turn_on(); else id(suspension_power).turn_off();
+                // charger_1/charger_2/suspension_handbrake/suspension_power/suspension_service
+                // deliberately not reapplied here - they're ungated now (see
+                // their own on_state comments) and default safely off, so
+                // there's nothing to catch up.
                 if (id(req_dash_shutdown_request).state) id(dash_shutdown_request).turn_on(); else id(dash_shutdown_request).turn_off();
-                if (id(req_suspension_service).state) id(suspension_service).turn_on(); else id(suspension_service).turn_off();
                 if (id(req_low_box).state) id(low_box).turn_on(); else id(low_box).turn_off();
                 if (id(req_diff_lock).state) id(diff_lock).turn_on(); else id(diff_lock).turn_off();
                 if (id(req_rear_power).state) id(rear_power).turn_on(); else id(rear_power).turn_off();
@@ -502,9 +501,16 @@ binary_sensor:
     internal: true
     register_type: coil
     address: 141
+    # No req_gui_ready gate, deliberately - unlike everything else on this
+    # bus, chargers/suspension default OFF (restore_mode: DISABLED on the
+    # actual switches) and must only ever go on when explicitly commanded,
+    # never auto-recovered. A dash restart's reset-to-False can only ever
+    # assert the already-safe default here, so there's nothing for the gate
+    # to protect against - and gating it was actively wrong: it delayed
+    # genuine button presses until gui_ready caught up (the "very
+    # unresponsive" symptom) for zero safety benefit.
     on_state:
       - lambda: |-
-          if (!id(req_gui_ready).state) return;
           if (x) id(charger_1).turn_on();
           else id(charger_1).turn_off();
   - platform: modbus_controller
@@ -513,9 +519,9 @@ binary_sensor:
     internal: true
     register_type: coil
     address: 142
+    # No gate - see req_charger_1's comment.
     on_state:
       - lambda: |-
-          if (!id(req_gui_ready).state) return;
           if (x) id(charger_2).turn_on();
           else id(charger_2).turn_off();
   - platform: modbus_controller
@@ -524,9 +530,9 @@ binary_sensor:
     internal: true
     register_type: coil
     address: 143
+    # No gate - see req_charger_1's comment.
     on_state:
       - lambda: |-
-          if (!id(req_gui_ready).state) return;
           if (x) id(suspension_handbrake).turn_on();
           else id(suspension_handbrake).turn_off();
   - platform: modbus_controller
@@ -535,9 +541,9 @@ binary_sensor:
     internal: true
     register_type: coil
     address: 144
+    # No gate - see req_charger_1's comment.
     on_state:
       - lambda: |-
-          if (!id(req_gui_ready).state) return;
           if (x) id(suspension_power).turn_on();
           else id(suspension_power).turn_off();
   - platform: modbus_controller
@@ -557,9 +563,9 @@ binary_sensor:
     internal: true
     register_type: coil
     address: 150
+    # No gate - see req_charger_1's comment.
     on_state:
       - lambda: |-
-          if (!id(req_gui_ready).state) return;
           if (x) id(suspension_service).turn_on();
           else id(suspension_service).turn_off();
   - platform: modbus_controller
