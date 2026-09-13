@@ -34,7 +34,15 @@ globals:
 
 interval:
   # Push sensor readings to dash - it only ever reads these locally now.
-  - interval: 5s
+  # Was 5s - bumped alongside the coil push below and battery-bms.yaml's
+  # own register push, to give the request-coil read poll more room after
+  # it grew from 52 to 62 registers (req_gui_ready's move to address 100) -
+  # confirmed live the read poll's actual success rate had dropped to
+  # roughly 1-in-3 attempts (~490ms average vs the 150ms it's configured
+  # for). Freshness of these readings doesn't matter; button responsiveness
+  # does - same reasoning as the existing tuning history in the coil push
+  # comment below.
+  - interval: 8s
     then:
       - modbus_client.write_multiple_registers:
           address: 5
@@ -66,7 +74,10 @@ interval:
   # roughly once every ~15s - the two writes were crowding out the read far
   # more than their fair share. Status can afford to be slower; buttons
   # can't.
-  - interval: 4000ms
+  #
+  # Bumped again, 4000ms -> 6000ms, alongside the register push above and
+  # battery-bms.yaml's own push - same reasoning, see that comment.
+  - interval: 6000ms
     then:
       - modbus_client.write_multiple_coils:
           address: 5

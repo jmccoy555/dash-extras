@@ -77,11 +77,14 @@ text_sensor:
 # Pushed to dash as registers 4-7 (1-3 are outside/inside temp and
 # humidity, see modbus-dash.yaml), *100 scaled like those - current can be
 # negative (discharging) so dash's side must decode it as int16, not
-# uint16. Piggybacks on modbus-dash.yaml's existing 5s push interval rather
-# than adding a second one - move this block there instead of duplicating
-# an interval: if that's preferred.
+# uint16. NOT actually piggybacking on modbus-dash.yaml's register push
+# despite matching its interval value (an earlier comment here claimed it
+# did - it doesn't; this is its own separate interval: block/timer) - so it
+# was a genuine third competitor for the bus, not sharing a turn with that
+# one. Bumped 5s -> 8s alongside modbus-dash.yaml's two pushes, same
+# reasoning: freshness doesn't matter here, button responsiveness does.
 interval:
-  - interval: 5s
+  - interval: 8s
     then:
       - modbus_client.write_multiple_registers:
           address: 5

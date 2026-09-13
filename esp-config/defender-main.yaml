@@ -14,7 +14,7 @@ substitutions:
   # coil-ordering/gate fixes especially) - lets a flash actually be
   # confirmed as "this is the version I think it is" via MQTT/web_server
   # instead of only inferring it from uptime/reset_reason after the fact.
-  config_version: "2026-09-13.7 (AUX battery: computed TTG added, capacity-full removed)"
+  config_version: "2026-09-13.8 (widened the 3 periodic pushes to give the button-poll more bus room)"
 
 packages:
   # wifi: !include common/wifi-wpa.yaml
