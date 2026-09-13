@@ -197,14 +197,19 @@ REQUEST_COIL_OFFSET = 100
 # refresh_from_datastore() has re-learned and re-asserted the true state
 # (which it can't do until the ESP's own next status push arrives, up to
 # ~4s later - see output.yaml) reads that False as a genuine "turn it off"
-# request. This coil is a request-range address the ESP already polls as
-# part of its merged 110-161 read (previously an unused filler slot, see
-# modbus-dash.yaml) but ignores every other coil's on_state until this one
-# reads True - so it must go a full restart-and-reseed cycle stale-then-
+# request. This coil is polled as part of the ESP's merged 100-161 read
+# (see modbus-dash.yaml) but ignores every other coil's on_state until this
+# one reads True - so it must go a full restart-and-reseed cycle stale-then-
 # fresh before the ESP will act on anything again. Requires the matching
 # ESP-side gate in modbus-dash.yaml to actually stop anything; on its own
 # this dash-side half only makes the reseed happen, it doesn't gate reads.
-COIL_GUI_READY = 149
+#
+# Address 100, not 149: this coil must poll-and-update on the ESP side
+# before any coil it gates (110+), since a batch poll response fires each
+# coil's on_state in address order - sitting at 149 (after most of what it
+# gates) meant those coils read this gate's stale pre-restart value and
+# the interlock silently did nothing for them. See modbus-dash.yaml.
+COIL_GUI_READY = 100
 
 COIL_NAMES = {addr: name for name, addr in COIL_MAP.items()}
 AUTOMODE_COILS = {
