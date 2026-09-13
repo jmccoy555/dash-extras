@@ -217,6 +217,69 @@ binary_sensor:
                 if (id(req_rear_power).state) id(rear_power).turn_on(); else id(rear_power).turn_off();
                 if (id(req_side_lights).state) id(side_lights).turn_on(); else id(side_lights).turn_off();
                 if (id(req_headlights).state) id(low_beam).turn_on(); else id(low_beam).turn_off();
+  # Bridges req_gui_ready (100) into the same contiguous read as everything
+  # below (110-161) - modbus_controller only merges a range into one bus
+  # transaction when every address in it is declared (see the other
+  # req_filler_* entries), so a bare gap here would split the poll into
+  # multiple overlapping requests to the same unit. Confirmed live: this is
+  # exactly what happened moving req_gui_ready to 100 without these -
+  # "Frame already active for 5 with 2 requests pending, refused" and
+  # "Probe refused by hub" on the ESP's own debug log, dash never
+  # responding to anything as a result.
+  - platform: modbus_controller
+    modbus_controller_id: client_dash_requests
+    id: req_filler_101
+    internal: true
+    register_type: coil
+    address: 101
+  - platform: modbus_controller
+    modbus_controller_id: client_dash_requests
+    id: req_filler_102
+    internal: true
+    register_type: coil
+    address: 102
+  - platform: modbus_controller
+    modbus_controller_id: client_dash_requests
+    id: req_filler_103
+    internal: true
+    register_type: coil
+    address: 103
+  - platform: modbus_controller
+    modbus_controller_id: client_dash_requests
+    id: req_filler_104
+    internal: true
+    register_type: coil
+    address: 104
+  - platform: modbus_controller
+    modbus_controller_id: client_dash_requests
+    id: req_filler_105
+    internal: true
+    register_type: coil
+    address: 105
+  - platform: modbus_controller
+    modbus_controller_id: client_dash_requests
+    id: req_filler_106
+    internal: true
+    register_type: coil
+    address: 106
+  - platform: modbus_controller
+    modbus_controller_id: client_dash_requests
+    id: req_filler_107
+    internal: true
+    register_type: coil
+    address: 107
+  - platform: modbus_controller
+    modbus_controller_id: client_dash_requests
+    id: req_filler_108
+    internal: true
+    register_type: coil
+    address: 108
+  - platform: modbus_controller
+    modbus_controller_id: client_dash_requests
+    id: req_filler_109
+    internal: true
+    register_type: coil
+    address: 109
   - platform: modbus_controller
     modbus_controller_id: client_dash_requests
     id: req_worklight_passanger_side
@@ -651,6 +714,12 @@ binary_sensor:
     internal: true
     register_type: coil
     address: 148
+  - platform: modbus_controller
+    modbus_controller_id: client_dash_requests
+    id: req_filler_149
+    internal: true
+    register_type: coil
+    address: 149
   # Rear window requests (153-156) - contiguous right after 152
   # (diff_lock), so these extend the existing merged read automatically,
   # no new bus transaction. Momentary presses, same pattern as the front
