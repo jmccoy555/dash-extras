@@ -10,6 +10,11 @@ esp32:
 
 substitutions:
   device_name: defender-main
+  # Bump this on every meaningful change to this device's config (the
+  # coil-ordering/gate fixes especially) - lets a flash actually be
+  # confirmed as "this is the version I think it is" via MQTT/web_server
+  # instead of only inferring it from uptime/reset_reason after the fact.
+  config_version: "2026-09-13.1 (req_gui_ready reverted to 149, kept declaration-order-first)"
 
 packages:
   # wifi: !include common/wifi-wpa.yaml
@@ -221,6 +226,13 @@ sensor:
   #     sorting_group_id: sorting_group_bluetooth
 
 text_sensor:
+  - platform: template
+    name: "Config Version"
+    lambda: |-
+      return {"${config_version}"};
+    icon: mdi:tag
+    web_server:
+      sorting_group_id: sorting_group_system
   # Send IP Address
   - platform: wifi_info
     ip_address:
