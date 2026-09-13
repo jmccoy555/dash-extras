@@ -581,13 +581,30 @@ esphome:
       # is cheap (happens once, at boot) and makes it much more likely at
       # least one attempt lands outside a congestion window.
       - switch.turn_off: inverter_power
+      - switch.turn_off: charger_1
+      - switch.turn_off: charger_2
+      - switch.turn_off: suspension_handbrake
+      - switch.turn_off: suspension_power
       - delay: 500ms
       - switch.turn_off: inverter_power
+      - switch.turn_off: charger_1
+      - switch.turn_off: charger_2
+      - switch.turn_off: suspension_handbrake
+      - switch.turn_off: suspension_power
       - delay: 500ms
       - switch.turn_off: inverter_power
+      - switch.turn_off: charger_1
+      - switch.turn_off: charger_2
+      - switch.turn_off: suspension_handbrake
+      - switch.turn_off: suspension_power
+      # 140-144 are contiguous (inverter, charger_1, charger_2,
+      # suspension_handbrake, suspension_power) - one write covers all five
+      # dash request coils instead of two separate ones.
       - modbus_client.write_multiple_coils:
           address: 5
           start_address: 140
-          values: !lambda 'return std::vector<bool>{false};'
+          values: !lambda 'return std::vector<bool>{false, false, false, false, false};'
       - delay: 3s
-      - lambda: 'id(dash_boot_guard_inverter) = false;'
+      - lambda: |-
+          id(dash_boot_guard_inverter) = false;
+          id(dash_boot_guard_chargers) = false;

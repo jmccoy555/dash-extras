@@ -14,7 +14,7 @@ substitutions:
   # coil-ordering/gate fixes especially) - lets a flash actually be
   # confirmed as "this is the version I think it is" via MQTT/web_server
   # instead of only inferring it from uptime/reset_reason after the fact.
-  config_version: "2026-09-13.4 (req_gui_ready back to address 100, with wire evidence this time)"
+  config_version: "2026-09-13.5 (charger/suspension boot guard - off on ESP boot, persist on dash restart)"
 
 packages:
   # wifi: !include common/wifi-wpa.yaml

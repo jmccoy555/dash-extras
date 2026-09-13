@@ -21,6 +21,16 @@ globals:
     type: bool
     restore_value: false
     initial_value: 'true'
+  # Same purpose as dash_boot_guard_inverter, for charger_1/charger_2/
+  # suspension_handbrake/suspension_power - restore_mode: DISABLED only
+  # covers the ESP's OWN boot-time default, it does nothing to stop the
+  # interlock immediately re-asserting them on right after, from dash's
+  # still-true request coils (dash didn't necessarily restart just because
+  # the ESP did) - see the on_boot block in modbus-client.yaml.
+  - id: dash_boot_guard_chargers
+    type: bool
+    restore_value: false
+    initial_value: 'true'
 
 interval:
   # Push sensor readings to dash - it only ever reads these locally now.
@@ -225,10 +235,12 @@ binary_sensor:
                 if (id(req_lightbar_auto_white).state) id(lightbar_auto_white).turn_on(); else id(lightbar_auto_white).turn_off();
                 if (id(req_window_front_power).state) id(window_front_power).turn_on(); else id(window_front_power).turn_off();
                 if (!id(dash_boot_guard_inverter)) { if (id(req_inverter_power).state) id(inverter_power).turn_on(); else id(inverter_power).turn_off(); }
-                if (id(req_charger_1).state) id(charger_1).turn_on(); else id(charger_1).turn_off();
-                if (id(req_charger_2).state) id(charger_2).turn_on(); else id(charger_2).turn_off();
-                if (id(req_suspension_handbrake).state) id(suspension_handbrake).turn_on(); else id(suspension_handbrake).turn_off();
-                if (id(req_suspension_power).state) id(suspension_power).turn_on(); else id(suspension_power).turn_off();
+                if (!id(dash_boot_guard_chargers)) {
+                  if (id(req_charger_1).state) id(charger_1).turn_on(); else id(charger_1).turn_off();
+                  if (id(req_charger_2).state) id(charger_2).turn_on(); else id(charger_2).turn_off();
+                  if (id(req_suspension_handbrake).state) id(suspension_handbrake).turn_on(); else id(suspension_handbrake).turn_off();
+                  if (id(req_suspension_power).state) id(suspension_power).turn_on(); else id(suspension_power).turn_off();
+                }
                 if (id(req_dash_shutdown_request).state) id(dash_shutdown_request).turn_on(); else id(dash_shutdown_request).turn_off();
                 if (id(req_suspension_service).state) id(suspension_service).turn_on(); else id(suspension_service).turn_off();
                 if (id(req_low_box).state) id(low_box).turn_on(); else id(low_box).turn_off();
@@ -579,8 +591,14 @@ binary_sensor:
     internal: true
     register_type: coil
     address: 141
+    # dash_boot_guard_chargers blocks this for a few seconds after an ESP
+    # boot specifically (see modbus-client.yaml's on_boot) - without it, an
+    # ESP reboot that dash didn't also restart for would see dash's still-
+    # true request coil and immediately turn this back on, defeating
+    # restore_mode: DISABLED's whole point (default off on ESP boot).
     on_state:
       - lambda: |-
+          if (id(dash_boot_guard_chargers)) return;
           if (!id(req_gui_ready).state) return;
           if (x) id(charger_1).turn_on();
           else id(charger_1).turn_off();
@@ -590,8 +608,10 @@ binary_sensor:
     internal: true
     register_type: coil
     address: 142
+    # See req_charger_1's comment.
     on_state:
       - lambda: |-
+          if (id(dash_boot_guard_chargers)) return;
           if (!id(req_gui_ready).state) return;
           if (x) id(charger_2).turn_on();
           else id(charger_2).turn_off();
@@ -601,8 +621,10 @@ binary_sensor:
     internal: true
     register_type: coil
     address: 143
+    # See req_charger_1's comment.
     on_state:
       - lambda: |-
+          if (id(dash_boot_guard_chargers)) return;
           if (!id(req_gui_ready).state) return;
           if (x) id(suspension_handbrake).turn_on();
           else id(suspension_handbrake).turn_off();
@@ -612,8 +634,10 @@ binary_sensor:
     internal: true
     register_type: coil
     address: 144
+    # See req_charger_1's comment.
     on_state:
       - lambda: |-
+          if (id(dash_boot_guard_chargers)) return;
           if (!id(req_gui_ready).state) return;
           if (x) id(suspension_power).turn_on();
           else id(suspension_power).turn_off();
