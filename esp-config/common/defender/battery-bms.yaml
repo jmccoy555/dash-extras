@@ -45,12 +45,34 @@ sensor:
     capacity_remaining:
       id: bms_capacity_remaining
       name: "AUX Battery Capacity Remaining"
-    nominal_capacity:
-      id: bms_capacity_full
-      name: "AUX Battery Capacity Full"
     state_of_charge:
       id: bms_soc
       name: "AUX Battery SOC"
+
+# Not a real JBD BMS value - this component doesn't expose one (checked its
+# supported sensor keys directly, no time-to-go/runtime field exists) - so
+# computed here the standard way: remaining capacity (Ah) / discharge
+# current (A). bms_current's sign convention is negative while discharging
+# (see the interval push below), so only that side is meaningful; charging
+# or ~idle has no sensible "time to empty" and shows as such instead of a
+# nonsense number.
+text_sensor:
+  - platform: template
+    name: "AUX Battery Time To Go"
+    id: bms_ttg
+    icon: mdi:timer-sand
+    update_interval: 30s
+    lambda: |-
+      float current = id(bms_current).state;
+      if (current >= -0.05) {
+        return current > 0.05 ? std::string("Charging") : std::string("Idle");
+      }
+      float hours = id(bms_capacity_remaining).state / (-current);
+      int hrs = (int) hours;
+      int mins = (int) ((hours - hrs) * 60);
+      char buffer[16];
+      sprintf(buffer, "%dh %dm", hrs, mins);
+      return std::string(buffer);
 
 # Pushed to dash as registers 4-7 (1-3 are outside/inside temp and
 # humidity, see modbus-dash.yaml), *100 scaled like those - current can be
