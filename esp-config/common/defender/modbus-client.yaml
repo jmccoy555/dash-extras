@@ -599,7 +599,24 @@ esphome:
       - switch.turn_off: suspension_power
       # 140-144 are contiguous (inverter, charger_1, charger_2,
       # suspension_handbrake, suspension_power) - one write covers all five
-      # dash request coils instead of two separate ones.
+      # dash request coils instead of five separate ones.
+      #
+      # Retried the same way as the switch.turn_off calls above and for the
+      # exact same reason: this write has no retry of its own, and a single
+      # refusal here (likely at boot, same congestion) leaves dash's own
+      # copy of these request coils still true - so once the guard clears,
+      # dash "correctly" (per its own stale data) turns them right back on.
+      # Confirmed live: this is what was actually happening.
+      - modbus_client.write_multiple_coils:
+          address: 5
+          start_address: 140
+          values: !lambda 'return std::vector<bool>{false, false, false, false, false};'
+      - delay: 500ms
+      - modbus_client.write_multiple_coils:
+          address: 5
+          start_address: 140
+          values: !lambda 'return std::vector<bool>{false, false, false, false, false};'
+      - delay: 500ms
       - modbus_client.write_multiple_coils:
           address: 5
           start_address: 140
